@@ -1,4 +1,3 @@
-require './constants'
 require 'yaml'
 require 'byebug'
 
@@ -11,6 +10,8 @@ class RankSentences
   DICTIONARY = YAML::load_file('./dictionary.yml')
 
   PREMIUM_POSITION_RATIO = 0.1.freeze
+
+  CUE_WORDS = YAML::load_file('./cue_words.yml')
 
   def rank(article)
     tokens_frequency = self.class.count_tokens(article.sentences_as_tokens.flatten)
