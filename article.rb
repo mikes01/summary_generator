@@ -36,7 +36,7 @@ class Article
       remove_stop_words: true, expand_contractions: true, remove_emoji: true,
       remove_urls: true, remove_emails: true, remove_domains: true,
       hashtags: :keep_and_clean, mentions: :keep_and_clean, clean: true,
-      classic_filter: true, punctuation: :none
+      classic_filter: true, punctuation: :none, minimum_length: 3
     )
   end
 end

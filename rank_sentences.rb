@@ -1,15 +1,19 @@
 require './constants'
+require 'yaml'
 require 'byebug'
 
 class RankSentences
-  WORD_FREQUENCY_AT_ARTICLE_WEIGHT = 1.freeze
-  TITLE_TOKENS_WEIGHT = 5.freeze
-  SENTENCE_POSITION_WEIGHT = 2.freeze
-  CUE_WORDS_WEIGHT = 3.freeze
+  WORD_FREQUENCY_AT_ARTICLE_WEIGHT = 2.freeze
+  WORD_FREQUENCY_AT_DICTIONARY_WEIGHT = 0.1.freeze
+  TITLE_TOKENS_WEIGHT = 10.freeze
+  SENTENCE_POSITION_WEIGHT = 4.freeze
+  CUE_WORDS_WEIGHT = 5.freeze
+  DICTIONARY = YAML::load_file('./dictionary.yml')
+
   PREMIUM_POSITION_RATIO = 0.1.freeze
 
   def rank(article)
-    tokens_frequency = count_tokens(article.sentences_as_tokens.flatten)
+    tokens_frequency = self.class.count_tokens(article.sentences_as_tokens.flatten)
     ranked_sentences = {}
     article.sentences.each_with_index do |sentence, index|
       ranked_sentences[index] = count_points_for_sentence(
@@ -20,21 +24,23 @@ class RankSentences
     choose_best_sentences(ranked_sentences, article.sentences, article.length)
   end
 
-  private
-
-  def count_tokens(tokens)
-    Hash.new(0).tap do |tokens_frequency|
+  def self.count_tokens(tokens, tokens_frequency_hash = nil)
+    (tokens_frequency_hash || Hash.new(0)).tap do |tokens_frequency|
       tokens.each do |token|
         tokens_frequency[token] += 1
       end
     end
   end
 
+  private
+  
+
   def count_points_for_sentence(sentence, index, tokens, tokens_frequency, sentences_count, title_tokens)
     points = 0
     tokens.each do |token|
       points += tokens_frequency[token] * WORD_FREQUENCY_AT_ARTICLE_WEIGHT
       points += TITLE_TOKENS_WEIGHT if title_tokens.include? token
+      points += DICTIONARY[token].to_i * WORD_FREQUENCY_AT_DICTIONARY_WEIGHT
     end
     if sentence_is_at_premium_position?(index, sentences_count)
       points += SENTENCE_POSITION_WEIGHT 
