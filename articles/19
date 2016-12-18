@@ -1,0 +1,79 @@
+Getting ready for new concurrency in Ruby 3 with Guilds.
+
+Ruby Guilds are the new way concurrency will be handled in Ruby 3. There’s still a long way to go until we reach that point, but I believe that we can already start implementing some of the concepts that will make our lives easier when we reach  Ruby 3.
+
+Note: this is not an article explaining what are Guilds and how do they work. You can read excellent explanations on that here:
+
+http://olivierlacan.com/posts/concurrency-in-ruby-3-with-guilds/
+www.atdot.net/~ko1/activities/2016_rubykaigi.pdf
+Note 2: everything here is based on some assumptions which means that in few years the concept might look totally different. However it doesn’t mean that you shouldn’t use good practices or some recommendations that I describe below.
+
+Guilds basic concepts in a TL;DR version
+
+Guilds have at least one thread (and a thread have a fiber)
+Threads in different guilds can run in parallel
+Threads in a same guild can not run in parallel because of GIL/GVL/GGL (Giant Guild Lock)
+A guild can’t access the objects of other guilds
+Guilds are allowed to communicate with each other using channels (Guild::Channel)
+Objects can be copied between guilds (deep copy)
+Objects can be moved between guilds
+Immutable objects (deeply immutable) can be shared between guilds
+It sounds simple (and Koichi said that the initial concept implementation has only 400 lines), but it creates many problems that will have to be solved. I will try to cover some of them as they might have an impact on the overall performance of our code.
+
+Don’t try to unlearn locking and multi threading Ruby 2 approach
+
+TL;DR: you will still have to know how to deal with multi threading and it’s problems the way it is handled in Ruby 2.
+
+GVL is insufficient to guard against data races on Ruby2 and this won’t change inside single guild with multiple threads. Since Ruby core team aims to make Ruby 3 compatible with Ruby 2 software (so the community won’t split with incompatible Ruby versions), any Ruby 2 software will run in Ruby 3 in a single Guild. So all your synchronization and locking problems won’t go away without an effort.
+
+Scaling with guilds won’t be linear so don’t think it will solve all your problems
+
+Guilds won’t be silver bullets. They will give Ruby programmers a new, great set of tools but they will for sure create some problems. If you hope that memory usage will drastically go down and that performance will go up, without you doing anything you might be really disappointed when new Ruby appears.
+
+Objects owners mean more checking
+
+TL;DR: the less you share the smaller the transferring overhead will be.
+
+Objects will have guild owners. It means that Ruby will ahve to hve references to which guild an object belongs. One of the slides from Koichi’s presentation stathes that an exception will be thrown when trying to access object from other guild. It means that Ruby will have to have some sort of checker that will run either on:
+
+every object access
+every object access for objects that were transfered at least once (flag or something?)
+every object access of an object that is not frozen and references in other guilds
+Either way, there will be way more access checking. Ruby already checks the class of each object on it’s access, so maybe this could be combined together.
+
+What that means for us? The less objects we will share between guilds the faster they will run.
+
+Transferring ownership – moving references vs copying
+
+TL;DR: It might be faster (and for sure safer) to start using immutable structures if you plan to transfer a lot of data in between guilds.
+
+Programmers will definitely want to transfer ownership not only for simple objects but also for more complex (and big) data structures. It means that Ruby not only will have to move main objects but all subobjects (arrays of arrays of objects, etc).
+
+And here a question emerges: wouldn’t it be better to just copy the whole structure instead of updating all the references? Is there even a programming language that has a GC and allows moving mutable objects directly (without deep copying) between threads?
+
+Method cache will remain global
+
+TL;DR: OpenStruct will be a worse idea than it is right now. Try even harder not to invalidate method cache too much.
+
+When we redefine a method (or add new), method lookup will have to be performed an cache invalidation needs to occur on all the guilds. This means that we will have to stop execution of all the guilds at once (since there shouldn’t be a case when one runs on an old method version and another already uses new one).
+
+If you wonder what OpenStruct does to your Ruby code and what impact exactly it has, you can read my article about that here: http://mensfeld.pl/2015/04/ruby-global-method-cache-invalidation-impact-on-a-single-and-multithreaded-applications/.
+
+Global data
+
+TL;DR: Freeze all the global data you define, stop using global variables, don’t redefine stuff unless you really need to and don’t overwrite constants.
+
+By global data I mean:
+
+Global variables
+Class and module objects
+Class variables
+Constants
+Instance variables of class and module objects
+Operations that redefine things will be either impossible or slower. It will impact also access (mutable constants access between guilds).
+
+Summary
+
+There isn’t much to summarize since for each section there’s a TL;DR but it’s worth pointing out that we need to be more cautions about sharing our data and about doing a lot of meta-programming beyond good practices (like redefining dynamically built constants) and everything should be fine.
+
+SOURCE: http://mensfeld.pl/2016/11/getting-ready-for-new-concurrency-in-ruby-3-with-guilds/

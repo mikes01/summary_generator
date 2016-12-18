@@ -1,0 +1,248 @@
+Go Full Stack Rails — The Frontend part 3
+A pipeline of functional transformations.
+
+
+Although not mandatory, you can catch up with previous episodes if you haven’t already:
+The Backend Part 1: Working on the backend, exploring requirements and building a Rails controller to deliver timeline tweets
+The Backend Part 2: Building a timeline wrapper to isolate external dependencies
+The Frontend Part 1: A brief introduction to test-driven frontend development
+The Frontend Part 2: About ES6 Promises and improving Promise-based specs
+Each part of this tutorial touches on matters around a full-stack application written with Rails and ES6. The application itself may certainly look cool, but I’d like to call out a few aspects much more important than that. So far, we’ve been discoursing about a few questions, although briefly and within the context of an actual application:
+As developers, how do we get to our goals? Which processes do we leverage to get our applications working with the least amount of defects?
+A full-stack mindset: even if you are specialized in one part of the stack, the most valuable move you can make to your web development career is to get the big picture and acquire proficiency in both areas, therefore being up to any task.
+How to write modular and easy to understand code by taking advantage of tried and true practices all around the stack, everything backed by good tests. Bad tests can be damaging to any project and provide no value at all.
+How should we deal with JavaScript in Rails apps?
+Before getting to the code, I’d like to carry on with an important reflection. How should we deal with JavaScript in a Rails app?
+I can certainly say something about classic Rails developers, but it’s also true in general: historically, they did not care much about writing maintainable JavaScript, because Rails itself aims to be an integrated framework. I don’t want to discuss whether we should minimize the amount of JS in our apps, but it’s inevitable: you must eventually write it in web apps, regardless of your strategy — and when you do it, you should use proper tools, keep concerns separated and test your code. And depending on the app, there’s no other way around: JavaScript is a given, especially these days where web applications have reached the plateau of interactivity.
+I’ve seen apps with huge piles of spaghetti JavaScript that send shivers down the spine, where one doesn’t have the confidence to work with and constantly fears of all hell breaking loose. The only way to work with such a mess is to introduce hack on top of hack and avoid modifying any lines already working! That slows development down to a crawl because the code gets convoluted and hard to understand, and makes it easier to introduce bugs, regressions and decreases overall developer confidence.
+Sprinkling code bits with RJS is a viable and popular alternative in the Rails community, but it’s frowned upon by many. When going with this strategy, the only reasonable way to test your JS code is by using end-to-end Capybara tests, which are slow and often unreliable — therefore they should be kept to a minimum.
+You have to account for all paths a sprinkle of JS can take, which makes for a slow and bloated test suite that can eventually fail in weird ways. Or even worse, you end up not testing relevant code paths of your application. That’s not to say it’s an inherently bad approach — it can very well suit your needs! Everything in web development has pros and cons; you just have to weigh the best approach for your use case.
+On the other hand, JavaScript unit and integration tests encourage proper modularity and run much faster and reliably than Capybara end-to-end suites any day. And they are also easy to write once you get the kicks, contrariwise to what many folks think! But you must do it while developing the code, or you might not have a chance to introduce tests without performing dangerous refactorings.
+If you are serious about your application, your should have tests around any important business logic — it doesn’t matter whether written in a server-side language or something that compiles down to JavaScript.
+About our development process
+I really believe that TDD, when done right, can decrease the number of defects in any application. Here’s an outline of the process that we’ve been following:
+Write a short integration test describing a feature.
+Let that test fail while the process is not over.
+Figure out which units are required.
+For each unit, write one spec example at a time and make it pass with a minimal change.
+Repeat until the behavior of all units is completely covered.
+Revisit the integration spec and make sure it passes.
+That’s no silver bullet, but nonetheless, it’s the first approach I consider when developing any feature. Its trick to high-quality code is doing a minimal change and adjusting after every new requirement or iteration. You can try to be too smart and write everything at once, and some experienced folks with a keen sense of modularity do it very well — but in some situations, the chance of getting bugs and uncovered edge cases tends to be higher.
+And here’s something very cool which we’d not mentioned yet: we are test-driving our application without even opening the web browser! Fortunately, that will only be necessary once we get to the CSS part — we don’t need to do it while developing functionality, as long as we know what we are doing.
+Let’s build a parser
+So far, our application has been rendering an initial timeline when loading the web page for the first time, but it’s not exactly presentable to the end user and we’re not covering some important functionality:
+What if a tweet has newline characters? We certainly want to translate them to HTML tags such as paragraphs and line breaks.
+What if a tweet contains mentions? We should wrap them within hyperlinks to make them navigable.
+Here’s how raw text comes out of the server:
+@john You seem to be missing something about Ruby versioning:\n\nMinor version bump, i.e. (2.3 -> 2.4) can be backwards incompatible.\nGot it?
+But we want to present human-readable sentences:
+@john You seem to be missing something about Ruby versioning:
+Minor version bump, i.e. (2.3 -> 2.4) can be backwards incompatible.
+Got it?
+Which translates into the following HTML markup:
+<p><a href="#" data-mention>@john</a> This seems to be something many people miss about Ruby versioning<p>
+<p>Minor version bump, i.e. (2.3 -> 2.4) can be backwards incompatible.<br>Got it?</p>
+We can assume paragraphs are chunks of text delimited by two newlines, and single newlines correspond to line breaks.
+Every time you spot a series of transformations, you can think regarding a functional pipeline. Let’s imagine the flow of the raw text until getting to the final markup:
+sourceText |> parseTweetMentions |> wrapSentencesInTags |> parseLineBreaks
+Each function of the pipeline performs a single transformation to the text and passes the result on to the next function, until spitting out a result.
+Cool! We could start writing these functions immediately, but let’s get top-down as usual and specify an integration test.
+The integration test
+We need a function to orchestrate the interaction among the three smaller ones mentioned above. It will receive a raw tweet and return a brand new object with a parsed tweet.text. Let’s call it parseOneTweet.
+Since this function is nothing more than a combination of three others, we can briefly describe it with an integration spec:
+
+We could perform a single deep.equal assertion, but failures would probably be hard to read
+As you can see, this spec has just enough to prove the orchestration works. We haven’t got the logic ready yet, so parseOneTweet will just return the input tweet for now:
+
+And of course this spec fails, run it with npm run test:integration:
+expected '1 shot of Tequila
+2 shots of Tequila...
+3 shots of Tequila...' to equal '<p><a href="#" data-js-mention>@dude</a> 1 shot of Tequila</p><p>2 shots of Tequila...<br>3 shots of Tequila...</p>'
+Excellent, now we can take care of the other functions and get deep down into each one’s behavior using unit tests.
+Wrapping sentences in paragraphs
+When the text is blank
+The easiest way to get started with any unit test is by specifying the most trivial case: the empty case. When the text is blank and composed only of whitespace characters, we should expect wrapSentencesInTags to return an empty string:
+
+Since the spec does not depend on the browser environment, we can save it on the unit folder and run it as a “unit spec” with the following command:
+npm run test:unit
+Unfortunately, we get an error because we haven’t created the file yet:
+Module not found: Error: Cannot resolve module ‘app/twitter/wrapSentencesInTags’
+And to make it pass we can create the function and hardcode the return value:
+
+When having no newlines
+In that case, we expect the text to be trimmed and wrapped within one paragraph tag:
+
+It’s no surprise this spec fails: now our code needs to be good enough to make all examples pass. Some conditional string interpolation will do just fine:
+
+The conditional also takes the empty case into account
+And here we are:
+wrapSentencesInTags
+ when source text is blank
+ ✓ renders an empty string
+ when source text does not have line breaks
+ ✓ is parsed to a paragraph with trimmed text
+When having two chunks of text joined by two newlines
+In that case, we should have one paragraph for each chunk of text surrounding two newlines.
+
+Now we have to adjust the code so that it takes care of many paragraphs instead of just one:
+
+This function makes everything pass, so far. It converts the string to an array of lines, trims all of them and conditionally wraps each one within a paragraph tag. In the end, it’s transformed back into a string.
+When having two chunks of text joined by three newlines
+Do you recall that a paragraph is any text delimited by two newlines? That said, we must leave any “single” newline characters alone:
+
+This spec yields the following error:
+AssertionError: expected '<p>Hey!</p><p>Now we are talking</p>' to equal '<p>Hey!</p><p>\nNow we are talking</p>'
+ + expected — actual
+-<p>Hey!</p><p>Now we are talking</p>
++<p>Hey!</p><p>
++Now we are talking</p>
+It communicates we are chomping “single” newline characters when we shouldn’t.
+Now things start to get tricky: our code has to satisfy four specs. We can make everything pass using a divide and conquer approach: first, trim all lines, then split the string by two newlines and apply the same paragraph transformation as before:
+
+Awesome, now we have four passing specs:
+wrapSentencesInTags
+ when source text is blank
+ ✓ renders an empty string
+ when source text does not have line breaks
+ ✓ is parsed to a trimmed paragraph
+ when source text has two chunks joined by two line breaks
+ ✓ chunks before and after are parsed to trimmed paragraphs
+ when source text has three subsequent line breaks
+ ✓ chunks before and after two line breaks are parsed to paragraphs
+All cases together
+What if the raw text is bound to have three paragraphs? Let’s introduce a slightly more complex example, just to make sure the situation is parsed correctly:
+
+And it passes right away. This is just a safety net to make sure the code is dynamic and performs the same old transformation for each mention.
+Refactoring to a pipe
+The tests are passing, but the code’s still not good enough. Let’s refactor and make the flow more evident and explicit. If you quickly scan the function, you’ll notice it has two responsibilities: “trim lines” and “parse paragraphs”. Let’s extract them to specialized private functions:
+
+One refactor that generally yields readability improvements is to get rid of anonymous functions
+Wow, that’s a brutal difference! We named all concepts, and the code does not look like a hieroglyph anymore.
+Next up, there’s a transformation going on within wrapSentencesInTags: the text goes through two functions at line 14, and it’s not exactly what I call easy to read.
+lodash provides a pipe function to make these transformations explicit, which is part of its functional programming toolkit. Install lodash:
+$ npm install lodash --save
+Now we can build a new function by composing a “pipe” of two other functions:
+
+How awesome is that? The beauty of this approach is that we can add functions to the pipeline whenever we feel like needing new transformations.
+Replacing newlines with line breaks
+This is the most straightforward function of all three, so let’s not waste our precious time. Replacing \n with <br> yields the result we are aiming for. Here’s the spec:
+
+And here’s how to make it green:
+
+Parsing the mentions
+Do you recall that our API returns a list of mentions contained in each tweet? Here’s an (incomplete) JSON sample:
+{
+  "text": "@dude Alright, I’ll be there. @yow get ready to rock",
+  "mentions": ["dude", "yow"]
+}
+We can use this list to figure out which mentions are in need of parsing. Searching and replacing all names that match a mention and skipping the list won’t do, because only Twitter knows which screen names are valid.
+The empty case
+What if a tweet has no text and consequently no mentions? Easy, it should return an empty string.
+
+Making this spec green is quite straightforward:
+
+A tweet with one mention
+Next up, a tweet can have one mention:
+
+The “data-js-mention” attribute makes it easier for evented code to hook up. Classes should only be used for CSS.
+To make this spec pass, we can build a dynamic “mention” regex and use it to replace a match with an HTML template:
+
+A tweet with two mentions
+What about two mentions? Does the code work for this case? Let’s see:
+
+Running this spec blows it all up, because we are currently taking care of just one mention:
+AssertionError: expected 'Released by <a href="#" data-js-mention>@dude</a> under @yow supervision’ to equal 'Released by <a href="#" data-js-mention>@dude</a> under <a href="#" data-js-mention>@yow</a> supervision'
+Now we need to iterate over all mentions and repeat the same parsing procedure for each one:
+
+We must escape backslashes because we are using the non-literal regex syntax (which uses strings)
+A tweet with the same mention twice
+Yeah, we haven’t considered this case up until now. The time has come to do so:
+
+We need to add a global modifier to the regex, so that it acts globally on the input text and replaces all occurrences. To make the failing spec pass, line 5 should now look like this:
+regexp = new RegExp(`@${m}\\b`, 'g');
+Bingo!
+When mention is surrounded by non whitespace on the right
+This is our first actual edge case. What if there’s something that could be mistaken as a mention but is not a mention?
+
+Notice the chief@dudecooking.com… something in between the email can be mistaken as a mention
+This spec fails, but adding a “word boundary” character to the right of the regex makes it green. Change line 5 so that it looks like this:
+regexp = new RegExp(`@${m}\\b`, 'g');
+When mention is surrounded by non whitespace on the left
+We haven’t yet covered the left border of the mention string. For instance, something like @prefix@dude should not be parsed as a mention:
+
+And this spec blows up!
++ expected — actual
+-<a href=”#” data-js-mention>@dude</a> “@prefix<a href=”#” data-js-mention>@dude</a>” is not a valid ivar in Ruby
+ +<a href=”#” data-js-mention>@dude</a> “@prefix@dude” is not a valid ivar in Ruby
+Unfortunately, adding a word boundary to the left doesn’t work because @ is considered a “word” by regular expressions, which means the following regex is redundant and does not make sense: \b@dude\b. If we can’t count on word boundaries, we only have whitespaces left as an option.
+Let’s make the pattern match either ^@${mention} at the beginning of a line or \s@${mention}\b, when anywhere else on the line. We must also add a whitespace to the left of the replacement template if it exists in the replacing mention. This code makes all cases pass:
+
+Notice we are wrapping the whitespace in a group and referencing it in the template as $1
+And that’s it for our specs, now normal and edge cases are covered!
+parseTweetMentions
+ with no mentions
+ ✓ returns an empty string
+ when having one mention
+ ✓ transforms the mention into an anchor tag
+ when having two mentions
+ ✓ transforms all mentions into anchor tags
+ when having the same mention twice
+ ✓ transforms both mentions into the same anchor tag
+ when a mention is surrounded by non whitespace chars on the left
+ ✓ is not parsed as a mention
+ when a mention is surrounded by non whitespace chars on the right
+ ✓ is not parsed as a mention
+Now we can proceed to refactoring.
+Refactoring to use reduce
+Let’s extract the code responsible for parsing one mention over to a private function. Remember: functions should do one thing and do it well.
+
+This refactor makes it clear that our business is all about reducing a collection of mentions into a string of text. Notice how we are accumulating the value of text at each iteration. Folks acquainted with functional programming will quickly perceive that we can use reduce to make the transformation explicit:
+
+Specs still pass after performing this change, which means we are good!
+Back to the integration spec
+Now that all moving parts are working let’s unite them within parseOneTweet. We can compose a parser of three functions by using a pipe:
+pipe(parseTweetMentions, wrapSentencesInTags, parseLineBreaks)
+The order is really important here. parseTweetMentions reduces a full tweet object to a parsed string, and the other two functions receive a string. Also, we must parse paragraphs before parsing line breaks.
+Moreover, we don’t want to mutate the tweet object, instead we want to create a new one: the only difference is it will hold a parsed text string instead of a raw one. Avoiding mutations is generally a good practice. Here is the final code with everything discussed until now:
+
+Object.assign makes sure we are creating a new tweet object instead of mutating the existing one
+And here’s the summary:
+parseOneTweet
+ ✓ returns a tweet object with parsed text
+Plugging in the parser
+Now we need to plug our parser in the renderTweets function, which is responsible for transforming the API response into HTML markup. Note that renderTweets is not yet in an ideal spot — it still stands on the mountComponent function, but we will leave it as-is for now.
+Adding a new transformation to the response does the trick:
+
+No process is perfect, especially in early stages where we don’t know all requirements upfront. We really expected our foremost integration spec (mountComponent.spec.js) to still pass after these changes, but it does not:
+1) renders an initial timeline
+ mountComponent
+ AssertionError: expected { '0': <p></p>,
+ '1': <p>Hi <a href="#" data-js-mention="">@dude</a>!</p>,
+ '2': <p></p>,
+ '3': <p></p>,
+ '4': <p>Pizza!</p>,
+ '5': <p></p>,
+ length: 6,
+ item: [Function: item] } to have a length of 2 but got 6
+This failure relates to the following expectation:
+expect(fixture.querySelectorAll('.tweet > p')).to.have.length(2);
+We must have one paragraph for each tweet, thus summing it up to two — but instead we are getting six paragraphs! What’s going on?
+Debugging techniques are beyond our scope here, but it turns out we’ve specified the renderOneTweet function with the assumption a tweet would only have one paragraph ever, which is currently hardcoded into the template. Let’s revisit that function:
+
+For some reason, webkit browsers parse an HTML of two nested paragraphs (which is a syntax error) as three paragraphs— 2 tweets * 3 paragraphs == 6 actual paragraphs:
+<p><p>Some text</p></p>
+Since the tweet object comes into this function with paragraphs already rendered, we can now get rid of the hardcoded one. Just replace line 8 with this, and the integration spec will be all good:
+      ${tweet.text}
+Fixing the last failing spec
+The previous tweak makes mountComponent.spec.js pass, but renderOneTweet.spec.js unit spec is now failing! Since it’s not the role of this function to render paragraphs anymore, we need to change line 12 from this:
+const tweet = { created_at: '2016–01–01', text: 'Hi!' };
+Into this:
+const tweet = { created_at: ‘2016–01–01’, text: '<p>Hi!</p>' };
+And here’s the final spec:
+
+And now everything is beautifully passing.
+Wrapping up
+I hope you have enjoyed this post. We won’t cover hashtags, emails and URLs, therefore you can probably build parsers for each of these items as an exercise. Once they’re ready, just plug them in the pipeline! And don’t forget to update the existing integration spec.
+We are getting close to the end of this journey, but we still have a few posts coming up about events and other missing details. You may have noticed we didn’t mention JS events up until now; that’s because they are just simple declarations that hook up with existing code, so we deal with them in the end. And of course, we need to get back to our Capybara spec and add some CSS to prettify things for the end user as well.
+
+SOURCE: https://blog.codeminer42.com/go-full-stack-rails-the-frontend-part-3-a973a7b227f1#.koy1hy2x9

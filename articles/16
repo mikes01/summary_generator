@@ -1,0 +1,53 @@
+Using tags to browse ruby and gem source with Vim.
+
+A few month ago I went to Sydney where my teammate Andrew showed me a pretty nifty feature of Rubymine. He was able to jump into definitions of Ruby methods. That wouldn’t be so special until he seamlessly navigated into one of the ruby gems source code – I was amazed.
+
+In this article I’m going to describe how to achieve a similar workflow with Vim and convert it into a powerful IDE. Let’s start with jumping into method declarations inside your project.
+
+To jump between method declarations and symbols we need some sort of a map that Vim can use to navigate. These maps are called tags and the one we are going to use is Exuberant Ctags.
+
+The simplest generation is running ctags -R in the root of your project. If you are using vim-rails plugin you can regenerate your tags with :Rtags command. You can also set up your environment to automatically generate tags when file changes with guard or when you checkout new code with a git hook. For me, the manual generation is good enough.
+
+Navigating between tags
+
+Vim has a built-in navigation through the tags so there is no need for any plugin. The two commands I use the most are go to defition which is bound to ctrl + ] and go back ctrl + o.
+
+If there are multiple tags for selected symbol you can use :tselect command which is also accessible through visual mode and the key combination g]. You select the number of a tag that is the most likely match and hit enter. Apart from that, you can use :tnext and :tprevious commands.
+
+Another option is to use CtrlP – a fuzzy finder that can browse file names as well as tags. The command for that is :CtrlPTag.
+
+Vim also support mouse mode and navigation similar to more modern IDEs when you can use ctrl + click to navigate to definition and ctrl + right click to get back.
+
+Jumping into gem source
+
+So far we covered generating tags and navigation only in your project and that was good enough for me for couple years. But can we jump into method definition inside of gem we use?
+
+Without any integration you can use bundle open to browse the source code of a gem in your editor. Fortunately, we can do better and create tags for the gems we use.
+
+We need to install a few integrations into Vim – vim-rbenv and vim-bundler. And last piece of the puzzle is a gem called gem-ctags.
+
+That should be enough to teach our Vim how to navigate into the source of the gems we are using in a current project. Also, it hooks into bundler and whenever we update or install a new one it regenerates the tags for us – neat.
+
+Conclusion
+
+To get the fully functional setup firstly, install Exuberant Ctags with brew.
+
+brew install ctags
+You need the following plugins in your .vimrc if you are using Pathogen.
+
+Plugin 'vim-ruby/vim-ruby'
+Plugin 'tpope/vim-rails'
+Plugin 'tpope/vim-rbenv'
+Plugin 'tpope/vim-bundler'
+After that install the gem-ctags and rbenv-ctags.
+
+gem install gem-ctags
+gem ctags
+
+mkdir -p ~/.rbenv/plugins
+git clone git://github.com/tpope/rbenv-ctags.git \
+  ~/.rbenv/plugins/rbenv-ctags
+rbenv ctags
+And you changed your Vim into a powerful Ruby IDE. Now you can generate and update your project tags by running :Rtags and jump into code definition pressing ctrl + ].
+
+SOURCE: https://chodounsky.net/2016/12/09/using-tags-to-browse-ruby-and-gem-source-with-vim/

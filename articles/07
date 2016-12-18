@@ -1,0 +1,35 @@
+Rails feature that you've never heard about: schema cache.
+
+I’ve been doing Rails development already for more than five years and only now I learned about the schema cache, although this feature is mostly relevant for apps under the massive scale.
+
+What is it for?
+On boot, the Rails process makes SHOW FULL FIELDS query to get information about the database structure and columns types. This is required in order to know that the created_at column is DATETIME and we have to cast all values as a date time objects.
+
+Now imagine that you have a hundred of Unicorn processes and you restart them in your production cluster. Every process will query MySQL with the same query: SHOW FULL FIELDS. Keep in mind that this query is quite expensive because it’s not optimized as may be SELECT with an index.
+
+A hundred application servers all making an expensive query at the same time may also kill your database! To avoid it, Rails provides with the schema cache feature. The idea is:
+
+Serialize data about the schema (tables, columns, and types) into a file
+Distribute that file over all application servers
+Load the data from file to avoid hitting the database
+Here is the chart with a number of queries not using index: you can totally see the moment when we enabled the schema cache!
+
+
+
+Implementation
+In Rails <= 5.0, schema cache is serialized and persisted in Marshal. In Rails 5.1, I changed schema cache to use YAML to preserve compatibility of serialized cache between different Rails version.
+
+Schema cache is enabled by default for all Rails apps, but it won’t be used unless you have prepared the dump file on your app server with rake db:schema:cache:dump.
+
+Anyway, the SchemaCache class is only 100 LOC and I suggest that you check it out.
+
+Why you may need it?
+Using schema cache may not be worth it with only a couple of application servers, but you may start using it as you scale your app and the number of Unicorns grows.
+
+Further reading
+rails/rails#5162
+rails/rails#17632
+rails/rails#27042
+I have a plan to write more about Rails features that are not well known. Please let me know if you are interested in this topic.
+
+SOURCE: http://blog.iempire.ru/2016/12/13/schema-cache/

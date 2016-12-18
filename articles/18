@@ -1,0 +1,87 @@
+Ruby Coercion Protocols Part 1.
+
+Last time we saw how to extract Value Objects, as a potential solution for Primitive Obsession.
+
+In the example application, we express temperatures with the Float primitive. As result of a refactoring, we encapsulated that float into a value object: Temperature.
+
+Ruby Ecosystem Problems
+
+Now we're facing another problem: the third-party gem (a fictional weather-chart), that we're using to display a temperature chart, only accepts Float.
+
+It's understandable that the authors of the gem cannot foresee any specific need for anything other than Float. Temperature in the end, is a custom object that has a specific behavior for our application.
+
+In general, real world gems share this problem—they only accept specific Ruby types (Primitive Obsession again!).
+
+module Weather
+  class Chart
+    def initialize(temperatures)
+      temperatures.all? { |t| t.is_a?(Float) } or raise ArgumentError
+      # ...
+    end
+  end
+end
+We have seen a lot of gems do type checks via #is_a?. This is an anti-pattern that shouldn't be used, unless we know what we're doing.
+
+But what are the specific problems introduced by type checking?
+
+Duck-Typing, Anyone?
+
+Ruby is such a liberal language, it doesn't check the type that is passed as argument to a method. This is called Duck-Typing: we can pass whatever object we want to a method, without the language complaining.
+
+Open/Closed Principle, wuh?
+
+By restricting the access to a specific type, it prevents our gem from being "open for extension, but closed for modifications". It isn't open to accept different types, and it requires modifications to accept them. For instance, we need to change the implementation if we want to support BigDecimal too.
+
+We can never tell how our weather-chart gem will be used; the less restrictions on types, the better is for our users.
+
+Unneeded Inheritance
+
+To cheat that code above, it's tempting to define Temperature as a subclass of Float, so the check (t.is_a?(Float)) can pass.
+
+Ruby prevents inheriting from numeric primitives, Float included. But even when we're allowed to inherit (eg. Array, Hash, String), it isn't a good idea.
+
+The public interface of Temperature would then include methods that aren't just related to our model domain, but also to Float (eg. #nan?, #next_float).
+
+This would break encapsulation and interface segregation: our Temperature object would be able to do "too much". This isn't a big deal when an object is part of a closed source application, but when we're talking about Open Source, things are different.
+
+By intheriting from Float, we introduce an implicit public interface, that we don't see in the code, we don't even test, but some other developers could use. This can be a source of bugs (no tests), but it can also break the compatibility between different versions.
+
+For instance, imagine a developer depends on Temperature#next_float. In the end it's a public method, and they don't know that we have implicitely inherited Float. Then one day we decide to make Temperature a subclass of BigDecimal, at this point Temperature doesn't respond to #next_float anymore. We have introduced a breaking change, and don't even notice!
+
+Coercion Protocols To The Rescue
+
+But still, the authors of our fictional gem weather-chart want to make sure to deal with floats and not with any kind of Ruby type.
+
+Instead of checking the type with #is_a?, they can use Ruby Coercion Protocols. They are a set of methods defined by core Ruby types to coerce a given type into another. For instance, Integer defines #to_s, to produce a string representation of a number.
+
+In our case we're gonna use #to_f.
+
+module Weather
+  class Chart
+    def initialize(temperatures)
+      @temperatures = temperatures.map(&:to_f)
+    end
+  end
+end
+To make Temperature compatible with weather-chart, we need to define #to_f.
+
+class Temperature
+  # ...
+
+  alias to_f temperature
+end
+Conclusion
+
+How we did improved our code?
+
+We're separating good inputs (objects that are coercible to floats), from those which aren't (like hashes).
+We're sure @temperatures will only hold floats. If an object not coercible with float is passed, Ruby will raise an exception.
+We still respect Duck-Typing. We can freely pass an array of Temperature.
+The library is "open for extension": it doesn't care about the type passed in, as long it's coercible to a float.
+We don't have to work around the type checking by trying to make Temperature inherit from Float.
+Temperature can respect encapsulation.
+If you're maintainer of a Ruby gem, please consider making it open for extension via Coercion Protocols.
+
+In the next article, we'll go in-depth with how Coercion Protocols work. Until next time!
+
+SOURCE: https://blog.dnsimple.com/2016/12/ruby-coercion-protocols-part-1/

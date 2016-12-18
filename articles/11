@@ -1,0 +1,207 @@
+Go Full Stack Rails — The Frontend part 2
+About ES6 Promises and improving Promise-based specs.
+
+
+Welcome! Each part of this blog post series drills down into a bunch of pertinent details, aiming to form the big picture of a clean, maintainable and well-tested full-stack application written using Rails and ES6.
+Although not strictly required, it might be helpful to catch up with previous episodes if you haven’t already:
+The Backend Part 1: Working on the backend, exploring requirements and building a Rails controller to deliver timeline tweets
+The Backend Part 2: Building a timeline wrapper to isolate external dependencies
+The Frontend Part 1: A brief introduction to test-driven frontend development
+Where we left off
+In the last post, we went through some significant JS testing strategies and ended up with an integration spec describing part of our feature:
+When loading the web page for the first time, it should render tweets of a screen name which we call “initial timeline.”
+We turned that spec from red into green with no actual logic — instead, we made the mountComponent function return a hard-coded HTML string containing the tweets we expect. Obviously, this is not dynamic and thus is not what we want.
+Also, the following requirements sprung out from that integration spec:
+- Fetch timeline tweets from the server
+- Render tweets on the screen
+Which translates into the following line:
+fetchTimelineTweets(id).then(renderTweets);
+This code uses a modern JavaScript feature called “Promises.”
+Why promises?
+Promises are meant to alleviate the hassle of dealing with asynchronous code and avoid what is called “callback hell” or “callback soup.” In the old days, we’d probably have structured the example above like this:
+function fetchTimeline(id, callback) {
+  $.ajax('/twitter/timeline/' + id, { success: callback }); 
+}
+fetchTimeline(id, function renderTweets(data) {
+  // Code to parse and render incoming data
+});
+Although not obvious, there are deep problems with this code. What if we wanted to trigger an asynchronous event after rendering? Call it from renderTweets. Want to trigger another event in the end? Ugh, nesting a function within the callback soup would be the go-to solution:
+fetchTimeline(id, function renderTweets(data) {
+  // Code to parse and render incoming data
+  triggerEvent(function someEvent(data) {
+    triggerDependentEvent();
+  });
+});
+Can you visualize how this is bound to become a mess, even in a medium-sized application?
+Improving async code with Promises
+Promises were introduced natively in ES6 as a construct to improve this situation. With them, we can flatten any sequence of callbacks in a very clear layout:
+function fetchTimeline(id) {
+  // Returns a promise object which resolves the request
+  
+  // Don't worry with the internal looks of a promise object,
+  // instead focus on how to use them.
+  // We'll get to that eventually.
+}
+const promise = fetchTimeline(id)
+ .then(renderTweets)
+ .then(triggerEvent)
+ .then(triggerDependentEvent);
+Furthermore, they provide an advantage: the caller can extend the promise while it’s not resolved. It’s worth noting: each callback along the chain obtains the return value of the previous one.
+Promises can attend a multitude of uses, so they’re not only useful to perform HTTP requests. ES6 has the tools to implement Promises around any kind of business logic.
+Promises can also be rejected
+To handle rejections, we can pass a callback in to the catch function. It receives an error argument:
+function handleErrors(error) {
+  // Handle the error somehow...
+}
+fetchTimeline(id).then(renderTweets).catch(handleErrors);
+Basically, catch callbacks are used to:
+Handle rejections and ignore then callbacks.
+Catch exceptions thrown from previous then callbacks.
+Note: To catch exceptions originated in the promise “core” itself, use a then(successCallback, errorCallback) signature.
+It’s also possible to re-throw the error should we want to propagate it over the call stack:
+function handleErrors(exception) {
+  // Handle the exception and…
+  
+  throw exception;
+}
+fetchTimeline(id).then(renderTweets).catch(handleErrors);
+Now we know just enough about promises to get going, but before that let’s take a look at some workflow tips.
+Tips for running specs smoothly
+code42template provides some useful shortcuts to help us run specs. The following command watches for changes in project files and runs integration specs automatically and continuously:
+$ npm run test:integration:watch
+That’s especially useful when keeping two windows or split panes opened side-by-side: one with the code editor and another with the test runner.
+You can also run one spec at a time and skip the rest. Just chain the only attribute after the it function:
+it.only('does stuff', () => {
+  // Your test here
+});
+You can leverage the same trick with context or describe:
+context.only('a group of examples', () => {
+  // Focus on all examples of this context
+});
+Keep in mind that only should be used temporarily, so don’t ever commit it in version control!
+Fetching timeline tweets
+What would be the ideal implementation for fetchTimeline? It should probably return a promise object which eventually resolves into a response body. The caller could then extend it with then and catch callbacks.
+We will use the axios library, a standalone, promise-driven HTTP client which smooths out dealing with low level XMLHttpRequest APIs.
+Why not jQuery? Its famous “ajax” method is promise-compliant, but we would be bringing over a whole jungle of unneeded features.
+When the timeline response is 👍
+A sensible strategy to test fetchTimeline‘s behavior in isolation is to stub out integration boundaries such as the HTTP layer. We can use sinon fake server to accomplish that.
+Let’s make sure fetchTimeline’s return value is promise-compliant and whether it’s able to use a then callback:
+
+Technically this is a unit test. It’s stored in the “integration” folder because it needs to interact with browser-specific features such as AJAX.
+In a nutshell, this spec makes sure that:
+The request resolves to the correct response body
+Only then callbacks are called
+Other than that, three aspects especially draw our attention here:
+Mocha waits until the promise returned from the example resolves. This allows performing assertions at the tail of the callback chain, thus avoiding messy workarounds such as setTimeout. Remember to return the promise if you want this behavior.
+We are using sinon fake server’s autoRespond feature. It makes the request respond as soon as possible and avoids manual calls to server.respond().
+The deep.equal expectation tells mocha to compare each nested member recursively. Had we used equal, our spec would have failed due to that assertion being shallow.
+All good, now let’s make this boy pass.
+Making this spec pass
+Run the spec and you’ll see the following error in your terminal:
+fetchTimeline
+ when timeline response is ok
+ ✗ runs only then callback
+ Can’t find variable: fetchTimeline
+Let’s introduce the function that the error is asking for. Firstly, import it at the top of the spec file:
+import fetchTimeline from 'app/twitter/fetchTimeline';
+Now we need to install the axios library. Run the following command in your terminal:
+npm install axios --save
+Finally, let’s implement the actual code. Our implementation starts out very simple:
+
+But the following error pops up after running the spec:
+fetchTimeline
+ when timeline response is ok
+ ✗ runs only then callback
+ expected { Object (data, status, …) } to deeply equal { tweets: [ { text: ‘Hi!’ } ] }
+This message is quite confusing, but if you play around with axios for a while or take a look at its README, you may notice that get returns a full response object.
+We are only interested in the response body, so we need to filter it out before returning the promise. Here’s how to do that:
+
+And now our spec passes!
+fetchTimeline
+ when timeline response is ok
+ ✓ runs only then callback
+Chaining “then” callbacks
+The next example is fairly straightforward. Let’s make sure our promise object is able to chain then functions and transmit return values from callback to callback:
+
+The first expect call is a “smoke” precaution to avoid weird failures in case we receive something unexpected from the promise. The second expect actually meets our goal, and uses the tweet text to transmit a “modified” return value through the chain.
+You are probably noticing: this is starting to get hairy! Why are we going through all this trouble to test an HTTP promise? Let’s improve this thing and make our point clearer, starting with some sensible DRY improvements.
+Refactoring our test
+This is the most entertaining part of the process. Looking at what we currently have, the code to perform an HTTP request is particularly repetitive and annoying.
+Let’s make good use of JavaScript by leveraging its dynamism the right way! Why not extract a helper method to return an “extended” fake server object?
+
+Notice how we are extending the object with a new member function that’s especially suited for what we need. Now we can apply the helper to all of our examples:
+
+That’s a bit better, but we can improve it even further with a promise assertion plugin.
+Using chai-as-expected to improve promise assertions
+In the end, a promise resolves to the value returned by its last callback, right? chai-as-expected allows us to turn this:
+return promise.then((body) => {
+  expect(body).to.deep.equal(response);
+});
+Into this:
+return expect(promise).to.eventually.equal(response);
+How does it work? Chaining the eventually attribute before any existing chai expectation has the effect of “promisifying” it. Furthermore, mocha automatically waits for returned promises, remember that?
+Now let’s install the plugin as an NPM dev dependency:
+npm install chai-as-expected --save-dev
+We need to tell chai about this new plugin. Edit spec/javascripts/index.integration.js, so that it looks like this:
+
+Great. Now we can refactor our spec:
+
+Hola! That’s a bit better and easier to read. Now let’s tackle the last context of this spec.
+When the timeline response is 👎
+And what if we eventually get a non-200 HTTP response? Well, the catch callback should be fired with an error object, including at least the HTTP status code and the body.
+Fortunately, axios implements that behavior out of the box and our example gets pretty straightforward:
+
+And it passes right away.
+For sanity’s sake, I suggest you to change the expected value and check if anything fails. A spec that passes right on the first run should be faced as a smell, it doesn’t matter whether testing before or after the implementation!
+And we are finally done with fetchTimeline!
+But hasn’t a promise more features than this?
+Yeah, a promise has other behaviors. However, that’s just enough to secure our implementation and provide confidence that it works correctly, taking into account the features we will actually use.
+Why is this a good test?
+Astute readers will probably ask:
+Couldn’t we have used stubs to test this?
+Yes, but that would probably be a bad move. I really like using stubs when it makes sense, but in some cases they couple too much with the implementation and make things harder to change. Focusing on actual behavior is always a better bet.
+The advantage of the current approach is that we can switch out the HTTP code to use any promise-compliant library. Now here’s what’s downright cool: the following jQuery code has the same behavior and would still make our specs pass:
+
+Of course, we don’t want this code, but watch this: we will share specs between both implementations, just for fun and to make sure they behave exactly the same:
+
+I hope this gives you a good taste of using shared examples with mocha. It’s just JavaScript™.
+Rendering tweets
+Finally, here’s the “connection” we are striving for:
+fetchTimelineTweets(id).then(renderTweets);
+Since we want single purpose functions, let’s build one to render an individual tweet. We can then use map to act on a collection.
+Rendering one tweet
+This function is dead simple. It receives a tweet object with created_at and text members and returns the corresponding HTML template. Let’s enumerate the steps to test this:
+Call the renderTweet function with a tweet object.
+Inject the returned HTML into the DOM as a fixture.
+Query the DOM and make sure that what’s expected is there.
+Cool! Here’s how might we go about this:
+
+And to make this spec pass, we can use some straightforward ES6 interpolation:
+
+And that’s it!
+We could have used a templating library, but let’s keep it simple for now. After all, we trust Twitter not to deliver anything stupid security-wise, right?
+Make that integration spec pass
+Do you recall that integration spec which kicked off everything, showed off in the last post? Let’s make it pass with the functions we currently have.
+Before that, let’s use our new createFakeServer helper to DRY it up:
+
+Now let’s remove the hard-coded HTML markup and make the spec pass with dynamic code. We are still lacking the renderTweets function, so let’s implement it within mountComponent:
+
+Awesome, now our code is working as it should! Rejoice at the spec output:
+fetchTimeline
+ when timeline response is ok
+   ✓ runs only then callback
+   ✓ chains then callbacks
+ when timeline response is not ok
+   ✓ runs only the catch callback
+mountComponent
+  ✓ renders an initial timeline
+renderOneTweet
+  ✓ transforms a tweet object into an HTML string
+But didn’t we say in the last post that mountComponent should hold no actual logic? Yeah, that’s right in Coding Conventions! renderTweets will be moved to somewhere else in the future. Our concern is only about making the spec pass, and refactoring comes after that :)
+To be continued…
+There’s still ground to cover about Promises, as well as features to refactor and develop. We will learn how to construct our own Promises with ES6 and make good use of that in our specs.
+Developing a similar app is easy once you get to know all of this stuff. Practice is key: play around with examples, break stuff intentionally, try to build apps on your own. It takes a lot of practice to acquire proficiency in JavaScript development and testing. All the code developed up until now can be found in this GitHub repository.
+All that said, happy hacking and see you soon!
+If you have any questions or cool approaches to go about the stuff herein, do me a favor and hit me up in the comments!
+
+SOURCE: https://blog.codeminer42.com/go-full-stack-rails-the-frontend-part-2-e91ac08b40a#.6x0rtqu0q

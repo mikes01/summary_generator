@@ -1,0 +1,70 @@
+Development Tools, SRP, Demeter, Architecture and Putting Code and Functionality Where it Belongs.
+
+Dirty, but damn good at what it does.
+
+Avoid Dirtying Your Models For Performance Improvements
+
+A common thread I’ve seen, especially when going through older apps, are model attributes where they don’t belong. I’ve noticed the intent or reasoning behind this comes in two flavors, performance based, and convenience based. It’s important to remember that we have different tools to solve different problems. Let your relational database handle attributes on the model they belong in, and use other tools for convenience and speed. What follows are my thoughts on both refactors and greenfield designs in order to keep your data where it belongs. In the end, it all ties together and keeps things simpler, more powerful, and most importantly, quicker, both in the short and long term.
+
+A Classic Example of Mixing Where it Doesn’t Belong
+
+What follows is an example of what not to do. It’s one I’ve seen many times, has many variations. I’m writing this section from the perspective of a novice, junior developer, who may lack some more advanced skills to properly approach issues.
+
+Your awesome widget ecommerce application has two primary models: * Widget * Brand
+
+Widgets belongs_to :brand Brands has_many :widgets
+
+Your application turns on, there’s lots of sales, and all is well. That is, until some key pages are loading much slower than they should. The issue stems from the fact that every time a widget is displayed, the brand name is also displayed. In order to speed things up, there’s a few options for a page’s @widgets: * @widgets.includes(:brand) * Add brand_name as a field to widgets
+
+The solution should be obvious; kill the N+1 query by using includes. However, in testing, your developer notices that instantiating all these brands causes a huge memory spike, whereas adding a brand_name field to Widget is minimally intrusive on the memory footprint. They add that field and a callback on brand which does brand.widgets.update_all(brand_name: self.name) after save. Easy enough, and finished up. Plus, it also renders quicker, since less CPU time is spent building up each brand, just to nab that one field.
+
+While this implementation is indeed functional and solves the problem immediately at hand, it tightens the coupling between these two models, and uses a great tool, your RDB, for something at which it wasn’t designed for. The next section covers the proper tools to address this issue.
+
+The Tools, and Where to Put Things
+
+Eveything has both a place and a purpose; part of becoming a better developer it to identify holes in your arsenal of tools, then fill those holes with things suited to the task. In the above example, a more experienced developer would have been able to identify how to solve these issues.
+
+Models, and Your Relational Database
+
+RDBs excel at storing data, and combining or matching data for different types of objects as needed. However, you have to be responsible with the architecture. Relevant to this example, responsibilty would entail maintaing single responsibilities per table; Widgets should not store any brand information other than the brand_id with which they’re associated. A few cases jump to mind where the above implementation would introduce data integrity problems:
+
+What happens if your app crashes directly after updating a brand’s name?
+What happens when you update a brand in a manner which avoids callbacks?
+In either of these cases, our widgets would definitely have the incorrect brand name. That list is by no means exhaustive; I’m sure there are more cases. The point here is this: Let your database do what it’s good at, and leave data duplication for elsewhere.
+
+Decorators, Squared (aka Decorators and Presenters)
+
+The responsible and cheap (in terms of development time and server resources; ie, no caching layers needed) would be to throw a .includes(:brand), and then use a combination of Decorators and Presenters as needed to access the brand name. In our case, something like this:
+
+#decorators/widget_decorator.rb
+
+def brand_name
+  brand.name
+end
+That way, widget.decorate now knows about brand names, but your Widget model doesn’t have any unneccessary knowledge of other models, which can be a huge problem later on. Any methods directly places on a model introduce new code that affects the core functionality of that model, and if that code references another model, it expands the chances of something breaking. For reference, Law of Demeter. (Note, for pedantic purposes, this is more about the Single Responsibility Principle, but I consider accessing possibly null fields even from a ‘friend’ object a bad practice when it’s defined directly on the instance. It adds a whole new layer of things to account for)
+
+If you need to take this one step further, such as using decorators of logic only, you can add presenters on to take care of view only issues, but that’s a post for another day.
+
+Caching Solutions
+
+At the end of the day, if all else fails and displaying the information is still too slow, there are many options available to you to further increase the speed of your application’s renders.
+
+Key-Value stores such as Redis or Memcached
+Document stores like Elasticsearch
+Anything else which lives in memory and caches requests
+Usage of these can increase the complexity of your codebase, but pay huge dividends in speed increases while also adding other amazing functionality such as high powered searching.
+
+Benefits
+
+Succinctly, proper design and using tools for what they’re made for provide the following benefits
+
+Efficiency: Be well organized, have a single source of truth, and have well defined names
+Power: Be great at one thing, instead of marginally good at many
+Freedom: Make testable changes easily and with confidence due to SRP and well defined needs per class
+These all combine to give you quickness of coding, which gets everyone what they need sooner. Deliver those win-wins nonstop.
+
+If you enjoy having free time and the peace of mind that a professional is on your side, then you’d love to have me work on your project.
+
+Contact me via email or view a list of available services to see how I’ll make your life better, easier and bring satisfaction back into you running your business.
+
+SOURCE: http://blog.nrowegt.com/development-tools-srp-demeter-architecture-and-putting-code-and-functionality-where-it-belongs/

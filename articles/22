@@ -1,0 +1,69 @@
+Zero Downtime Migrations with ActiveRecord and PostgreSQL
+
+As our database and traffic continued to grow, we discovered that certain migrations which appeared harmless actually caused table locking and, in some cases, downtime!
+Instead of requiring all of our engineers to remember each one of these special cases, we’ve decided to automatically audit migrations at development and test time using the zero_downtime_migrations gem.
+This gem detects problematic migrations and raises an exception with instructions on how to perform the same operation the “zero downtime way” before it ever has a chance to reach production. It catches things like:
+Adding a column with a default
+Adding a non-concurrent index
+Performing schema changes with the DDL transaction disabled
+Changing the schema with data or index changes in the same transaction
+Using each instead of find_each to loop thru ActiveRecord objects
+Let’s take a look at what happens when we add a column with a default.
+class AddPublishedToPosts < ActiveRecord::Migration
+  def change
+    add_column :posts, :published, :boolean, default: true
+  end
+end
+This migration looks pretty simple! Unfortunately, if the posts table is large or receives significant traffic, then this migration will end up locking the table and blocking database connections until the service goes down!
+When we run rake db:migrate with this gem installed, we’ll receive an exception that displays instructions for the “zero downtime way” to perform the changes in this migration. Let’s take a closer look at this exception.
+ZeroDowntimeMigrations::UnsafeMigrationError: Adding a column with a default is unsafe!
+This action can lock your database table! Let's try doing this the "zero downtime way" instead.
+First let’s add the column without a default. When we add
+a column with a default it has to lock the table while it
+performs an UPDATE for ALL rows to set this new default.
+This can take a long time with significant size or traffic!
+  class AddPublishedToPosts < ActiveRecord::Migration
+    def change
+      add_column :posts, :published, :boolean
+    end
+  end
+Then we’ll set the new column default in a separate migration.
+Note that this does not update any existing data! This only
+sets the default for newly inserted rows going forward.
+  class AddDefaultPublishedToPosts < ActiveRecord::Migration
+    def change
+      change_column_default :posts, :published, true
+    end
+  end
+Finally we’ll backport the default value for existing data in
+batches. This should be done in its own migration as well.
+Updating in batches allows us to only lock 1000 rows at a time
+(or whatever batch size we prefer).
+  class BackportDefaultPublishedToPosts < ActiveRecord::Migration
+    def change
+      Post.select(:id).find_in_batches.with_index do |records, i|
+        puts "Processing batch \#{i + 1}\\r"
+        Post.where(id: records).update_all(published: true)
+      end
+    end
+  end
+If you're 100% positive that this migration is already safe, then wrap the call to `add_column` in a `safety_assured` block.
+  class AddPublishedToPosts < ActiveRecord::Migration
+    def change
+      safety_assured do
+        add_column :post, :published, :boolean, default: true
+      end
+    end
+  end
+# ./lib/zero_downtime_migrations/validation.rb:25:in `error!'
+# ./lib/zero_downtime_migrations/validation/add_column.rb:6:in `validate!'
+# ./lib/zero_downtime_migrations/validation.rb:8:in `validate!'
+Check out the zero_downtime_migrations README for more info about the issues this gem addresses as well as a list of all the error messages and instructions it provides to help prevent downtime!
+This gem doesn’t catch all of the special cases that we know of yet. Since we’re using Heroku Preboot for zero downtime deployments we also need to watch out for problematic migrations like:
+Renaming columns or tables
+Dropping columns or tables
+Changing column types
+We’ll continue to enhance and add validations to this gem over time as we encounter and learn from new problematic migrations. Try it out in your own projects and let us know what you think! Pull requests are welcome!
+Our engineering team is still growing! We’re hiring engineers in our San Francisco and Columbus, OH offices. Check out our careers page to learn more. We look forward to hearing from you!
+
+SOURCE: https://tech.lendinghome.com/zero-downtime-migrations-with-activerecord-and-postgresql-b3aca53ffbe6#.doze94cbl

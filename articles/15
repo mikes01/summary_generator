@@ -1,0 +1,21 @@
+The Pure Functions experiment
+
+Today I would like to talk about pure functions and how they help to write better and maintainable code. I tried myself as an experiment and it resulted in mind change, for good of course, applicable to any programming language you use even though the term is more common in the functional programming (FP) community. This is not a new conclusion you might say, but for me it was. There are lots of new ideas coming every day, lots from FP actually which is trendy ATM, but still, you need to convince yourself something is good for you, you need to try it and see if you should move from evaluating to adopting in your tool set. That’s what I did and here are the results.
+Find below the 5 most important points about Pure Functions from my point of view:
+Wait!, what it is a Pure function?
+A pure function is a function which:
+Given the same input, will always return the same output.
+Produces no side effects.
+Relies on no external state.
+
+1- Encourages the KISS principle (Keep It Simple Stupid): Writing pure functions enforces you to write simpler understandable code and to think more in orchestrating functions, making happy the Single Responsibility Principle and Demeter’s Law advocates and friends.
+“…Perhaps the most important design principle in computer science is KISS…” Eric Elliott
+2- Improves Testability: Definitely if your functions don’t mutate state, it is much easier to write tests, just set inputs and expect outputs: be welcome determinism and Immutability. BTW, I’m convinced that mutating state is never the answer, is OK to mutate state just in the constructor of classes, this should be a stated as another Law in software design, I’d call it Don’t Fu..ing Mutate State Law.
+3- Helps to Embrace Concurrency: You are set to go if you don’t mutate state, it will be easier in OO languages to write thread safe code, immutability is the base to concurrent and distributed programming in FP languages and that is not by accident.
+4- Determinism: As mentioned before:
+non-determinism = parallel processing + mutable state
+Everything is moving to muli-threaded or parallel programming now, you need to adhere to safer practices, non-determinism is the evil and goes against concurrency and sanity.
+5- Last but not least - Memoization and Laziness: Because pure functions are referentially transparent, we can compute their output once for given inputs and cache the results (memoization), also, you can invoke the computation just when the outputs are being used (laziness).
+I’ve been trying new FP concepts on daily basis in Ruby and Javascript and so far it’s been a delightful experience, I will continue sharing this ideas, and hopefully improving my writing skills. If you are interested and this post has helped somehow, please recommend it to reach out more people.
+
+SOURCE: https://medium.com/@ccverak/the-pure-functions-experiment-488ee3f16194#.76rcnbzam

@@ -1,0 +1,106 @@
+Differences in version handling between RubyGems and npm
+
+RubyGems and npm are the de facto standard package managers for Ruby and Node.js.
+
+At first glance they seem similar (because they are!), but when building a product that interacts with both of them, there are subtle difference that need to be taken into account.
+
+We recently added support for Ruby projects to Snyk. The differences between version handling in RubyGems and npm presented a few challenges along the way.
+
+This blog post describes those differences, the problems they caused, and how we resolved them.
+
+Semantic Versioning
+Developers in Node.js and Ruby interact with the Semantic Versioning standard primarily through these package managers. As a result, it’s easy to get the impression that the way each package manager handles versions is part of SemVer itself. As we will see, that is not the case.
+
+What is SemVer?
+Semantic Versioning (SemVer) is a standard for software version numbers that tries to help library-consumers understand the impact of new versions of libraries, simply by comparing version numbers.
+
+Software following the SemVer standard must be identified by compound version numbers. Changes to each compound part imply different types of changes in the software itself.
+
+To quote directly from http://semver.org:
+
+Given a version number MAJOR.MINOR.PATCH, increment the:
+
+1. MAJOR version when you make incompatible API changes,
+
+2. MINOR version when you add functionality in a backwards-compatible manner, and
+
+3. PATCH version when you make backwards-compatible bug fixes.
+
+Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
+
+The SemVer standard also specifies precedence rules — how versions should be compared when ordering them.
+
+What isn’t SemVer?
+Most (if not all) package managers allow for the specification of version “ranges”. Specifying software dependencies as ranges, e.g. >= 5.0 and < 6, allows for software libraries to be used in a wider range of scenarios.
+
+This “range specification” is not part of SemVer, even though the comparison rules are. This means that each package manager is able to use its own syntax and rules for specifying ranges, e.g. >= 5, ~ 1.2, ^2.3.0, >5 || <2.
+
+The range syntax of RubyGems and npm is very similar (more on that later), so if you often encounter both of them then its easy to start thinking of that syntax as part of the standard — even though it isn’t.
+
+Version numbers in npm and RubyGems
+Npm and RubyGems have different opinions about what is a valid version number.
+
+In npm, versions must strictly comply with Semantic Versioning 2.0. Any version number that does not specify a major, minor, and patch version is invalid.
+
+RubyGems has a looser concept of what a valid version is, allowing for an unlimited number of parts, e.g. 5.1.0.2.1.0 is perfectly valid. Gem authors are encouraged to follow the Semantic Versioning standard, but it is not programmatically enforced.
+
+Despite this, 4-part version numbers are fairly common in the RubyGems ecosystem. At Snyk we encounter them often, as many gems (notably Rails and its constituents) use the fourth part for security fixes (e.g. a vulnerability in 5.0.0 is fixed in 5.0.0.1).
+
+Version ranges in npm and RubyGems
+RubyGems and npm have a similar set of operators for specifying version ranges.
+
+Range handling in RubyGems is part of Ruby’s standard library. For npm it is handled by the semver package.
+
+Simple range syntax
+The simple range operators >, >=, <, >=, and = all behave identically in RubyGems and npm. Rubygems also provides a != operator, which is not supported by npm.
+
+Advanced range syntax
+Both npm and Rubygems allow for concise expression of complex ranges. Npm provides a larger set of operators than RubyGems, catering for a slightly wider set of complex ranges.
+
+They both provide a ~> operator, which specifies “pessimistic” ranges. It loosely means “accept any version from this one, up to a point that is likely to be safe, as indicated by semver”. However, the exact behaviour is subtly different in RubyGems and npm.
+
+RubyGems interprets it to mean “allow higher versions that change the least significant version part only”, whereas npm interprets it to mean “allow only patch changes if a patch version is specified, otherwise allow only minor version changes”. This is best illustrated by an example:
+
+range RubyGems interpretation npm interpretation
+~> 1.4.3.4  >= 1.4.3.4 and < 1.4.4  error, invalid version
+~> 1.4.3  >= 1.4.3 and < 1.5  >= 1.4.3 and < 1.5
+~> 1.4  >= 1.4 and < 2  >=1.4.0 and < 1.5.0
+What problems did this cause?
+At first, we assumed that version handling in RubyGems was a superset of npm, so we used the semver package for operations on both npm and RubyGems ranges.
+
+This lead to some surprising results in alpha testing. Almost every Ruby repository that we tested appeared to be extremely vulnerable — even completely up-to-date Rails applications.
+
+Comparing automated test reports to those created by hand highlighted many false positives (and a few false negatives). Further digging revealed that the difference in range semantics between RubyGems and npm was to blame.
+
+The underlying problem: a version that satisfies a particular range under RubyGems does not necessarily satisfy the same range under npm.
+
+We needed a different approach.
+
+How did we solve this problem?
+Snyk started with only npm support, so our product code already used npm’s semver package for version and range operations.
+
+We decided to create a similar library to provide RubyGems-style version handling, with the same API as the npm semver package.
+
+Our system then decides which of these libraries to plug-in based on the package manager used in the code that we’re testing, watching, and fixing.
+
+How did we implement ruby-semver?
+The RubyGems version handling is part of Ruby’s standard library. Rather than re-implement it ourselves, we decided to use Opal to transpile the appropriate parts of RubyGems into JavaScript.
+
+We started out by trying to transpile the classes directly from the Ruby source. This turned out to be impossible because of differences in Javascript and Ruby regular expression support.
+
+In the end we copied two classes from Ruby standard lib into our repo, altered the regular expressions to be JavaScript compatible, and added a script to transpile that ruby source into JavaScript.
+
+Once the transpiled code was working in a Node.js REPL, we added a set of decent tests for the npm-semver-style API that we wanted. Then we wrote the thinnest adapter possible between the npm SemVer API and the transpiled RubyGems code.
+
+This worked well, although it is reliant on a good Ruby-to-JavaScript transpiler. Implementing the behaviour by hand would have been possible, but would have required more effort, and more importantly, might have missed non-obvious edge cases already handled by RubyGems.
+
+Conclusion
+Adding support for Ruby to Snyk ended up exposing some interesting challenges in the ways that different languages and package managers handle versioning. Ranges for SemVer versions are even more problematic as they’re not defined at all.
+
+Understanding these challenges resulted in stronger understanding of SemVer, and its limitations, ultimately strengthening the core on which to build support for other ecosystems.
+
+If you’re working with both Ruby and Node.js, check out ruby-semver. We’ve open-sourced it in the hope that it might be useful to somebody else.
+
+And add Snyk to your Ruby projects. We’re actively adding support for new types of Ruby projects (including gems, watch this space).
+
+SOURCE: https://snyk.io/blog/differences-in-version-handling-gems-and-npm/

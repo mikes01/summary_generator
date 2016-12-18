@@ -1,0 +1,63 @@
+Monitoring Your App's Health with Sickbay and The Nurse
+This post will guide you through setting up this simple health monitoring system
+
+
+source https://www.flickr.com/photos/brykmantra/76765412
+With this simple Ruby stack, you'll be able to get live alerts whenever your apps (or the services you depend onto) are in a bad shape.
+This stack can be used for example to trigger a Kill Switch mechanism in your app: When your app receives the The Nurse's request into some endpoint, it stops some critical/automatic procedure to keep going.
+This can be extremely useful when dealing with a microservice architecture or when you app depends on external services.
+This stack can be also be used as a way to keep tracking of your apps outages (it saves every one it registers).
+It can easily be deployed in Heroku with almost zero configuration!
+Tag along to know how does those apps work, why are they useful and how you can deploy your own instance.
+Sickbay
+What does it do?
+Sickbay is a small and simple sinatra app with an endpoint that returns the HTTP status of a bunch of URLs in a single JSON response. It does that by sending a GET request to each URL received.
+$ curl -X GET 'http://localhost:9292?google=http://www.google.com.br&bing=http://www.bing.com'
+{
+  "google": "200",
+  "bing": "200"
+}
+Here's a link for a live demo. And this here returns you a link for the HTTP code of a both Google and Bing.
+Why you should use it?
+Sickbay can be used to monitor a bunch of health routes at once. With the status you've received, you can act accordingly. And that's exactly what The Nurse can do for you.
+Configuration and Deploy
+Just push it to Heroku. Simple as that.
+For more details on the implementation of Sickbay, please check the GitHub repository of the project.
+The Nurse
+What does it do?
+The Nurse is a small rails app that can alert whoever you want when your apps are in a bad shape. It uses Sickbay for health checking.
+How does it work?
+You can register the apps you want to be monitored (with Name, URL to be checked and the HTTP statuses that indicate your app is fine).
+Every X minutes (completely up to you) The Nurse checks your apps
+If N of last Y requests (again, completely up to you) returns a status code different from the one you expect, The Nurse send a POST request containing the name of the service, its URL and the last Y HTTP codes received. This POST will be sent to whoever URL you want.
+The app also registers an entry you your DB for each health check. This way you can easily go back in time and check how was your app at any given time.
+Why you should use it?
+With The Nurse you can monitor your whole stack at the any rate you need and act accordingly when things are going south.
+Configuration and Deploy
+You can customize:
+The URLs you want to monitor
+The URL of your Sickbay instance
+The frequency of the checks
+How many fails in the last N requests are enough to trigger a warning (N is also up to you).
+Who should be warned when an outage happens (we call it Doctor (get it??))
+Your Doctor should be able to receive and deal with the following request:
+{
+  "service_name": "TheFailingService",
+  "service_url": "www.this_service_failed.com/health",
+  "codes": ["200", "500", "500"]
+}
+To check how the environment variables responsible for each setting, please check the Configuring the app section of the repo.
+To deploy the app to Heroku, you'll need at least one paid dyno, since the free plans only support up to two (and we have three components: the server, Sidekiq and Clockwork). Also remember to properly config a Redis to Go addon.
+All health checks are stored into Statuses entries. Feel free to run the SQL or active record queries you like to fetch whatever data you want.
+Example:
+2.3.1 :013 > Service.first.statuses
+Service Load (0.3ms)  SELECT  "services".* FROM "services" ORDER BY "services"."id" ASC LIMIT $1  [["LIMIT", 1]]
+Status Load (40.5ms)  SELECT "statuses".* FROM "statuses" WHERE "statuses"."service_id" = $1  [["service_id", 1]]
+=> #<ActiveRecord::Associations::CollectionProxy [#<Status id: 1, code: 200, service_id: 1, created_at: "2016-11-29 19:25:31", updated_at: "2016-11-29 19:25:31">, #<Status id: 3, code: 200, service_id: 1, created_at: "2016-11-30 17:04:08", updated_at: "2016-11-30 17:04:08">, #<Status id: 6, code: 200, service_id: 1, created_at: "2016-11-30 17:04:59", updated_at: "2016-11-30 17:04:59">, #<Status id: 9, code: 200, service_id: 1, created_at: "2016-11-30 17:05:58", updated_at: "2016-11-30 17:05:58">, #<Status id: 12, code: 200, service_id: 1, created_at: "2016-11-30 17:06:59", updated_at: "2016-11-30 17:06:59">]>
+You can do tha same for outages:
+2.3.1 :012 > Service.first.outages
+Service Load (0.3ms) SELECT “services”.* FROM “services” ORDER BY “services”.”id” ASC LIMIT $1 [[“LIMIT”, 1]]
+Outage Load (0.3ms) SELECT “outages”.* FROM “outages” WHERE “outages”.”service_id” = $1 [[“service_id”, 1]]
+=> #<ActiveRecord::Associations::CollectionProxy [#<Outage id: 1, service_id: 1, codes: [500, 500, 500], created_at: “2016–12–02 15:11:52”, updated_at: “2016–12–02 15:11:52”>]>
+We have plans to add a web interface and endpoints to fetch this data, don't worry.
+For more details on the implementation, please check the GitHub repository of the project.
