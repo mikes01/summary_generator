@@ -1,0 +1,27 @@
+Our Path to MVP: Choosing Rails
+Ruby was the first language that made me feel like I could be a programmer. I’d always sorta tried to learn programming — I got books from the mall bookstore “Teach Yourself C++ in 24 Hours”, “Learn Java in 7 Days”, etc. I don’t think I learned anything from them.
+I found out about Ruby around 9 years ago from a blog post on digg.com. Ruby just clicked with me — I now felt like a programmer. Shortly after discovering Ruby, I found Rails.
+RAILS_GEM_VERSION = ‘1.2.3’
+That’s how long I’ve been working with Rails.
+I haven’t been totally faithful. I’ve looked at other Ruby frameworks (also Python and Node.js), I’ve even tried a few. But at least on the Ruby side of things, I’ve always ended back on Rails. I wouldn’t call myself a “fanboy”, though. There’s plenty that I don’t like — the asset pipeline is still odd and migrations still don’t feel quite right. But when I try to move fast in something else, it always feels so slow.
+# I have a lot of ideas for projects:
+dev $ ls rails -l | wc -l
+39
+dev $ ls rails -l | wc -l
+51
+The process I usually go through is to just start building something, and then I use that early work to validate the idea in my head — if the idea is good; I keep going, if it’s bad I throw it out. Speed is where Rails shines for me, and not speed in the sense that you often hear about with every new web framework or programming language. Speed in the sense of how long it takes me to get the idea that’s in my head, out into the real world, clickable, and functioning.
+The State of Building Things
+A lot of folks have moved away from Rails. That’s not surprising, as languages and frameworks come and go, and things move really fast in the development world.
+
+https://www.codementor.io/learn-programming/javascript-trends-skills-developers-should-learn
+I’ve been doing Node.js develoment for the last two years, and before that I’d only used Node where I thought it was appropriate. Those last two years have been interesting. React showed up and sorta turned everything upside down. Coffeescript sorta died, and ES6 and Typescript came along. Functional programming is all the rage, and object oriented code is “old”.
+None. Of. This. Matters. To. Me.
+I like building stuff. The stuff, the “thing”, is why I became a programmer, not because I like computer science. Programming gave me a way to make things happen on a computer — something I’d always wanted to be able to do, but hadn’t figured out how.
+This isn’t to say that I don’t think the way things are going is cool or exciting. React is interesting, and it feels more “right” than “wrong” to me. And it is painful to go back to regular ole JS after using ES6 for a few years. But when I have to spend too much time getting things setup to work, and even more time trying to debug things when they are finally setup, it starts to get in the way of me making things — that’s a problem for me.
+Minimally Viable Product
+The idea behind an MVP is to get something out there quickly, with limited features, and use that product to learn what works and what doesn’t. While Rails makes development fast, you can still probably take any expected product launch “timeline” and double it. Even then, you’re likely still gonna be off.
+Speed is so important for an MVP. Well, speed and sanity. Fighting with emerging technologies, or major version bumps that deprecate APIs you’ve invested time into, usually isn’t the best choice for speed or sanity.
+We chose Rails for WorkWeek because we’re a small team trying to launch a product, not because it’s the hottest framework or technology, and not because it’ll look good on a resume.
+Maybe Node, Elixir, etc. are the right choice for you. They certainly appeal to the engineer in me, but when you’re working on a product and want to get it out the door, you have to give up that desire to use the new hotness and think pragmatically, or you may never get it done. For me, nothing compares to Rails.
+
+SOURCE: https://medium.com/@trvsdnn/our-path-to-mvp-choosing-rails-f3d5de198df#.e77cm0gfh

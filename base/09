@@ -1,0 +1,151 @@
+Go Full Stack Rails: The Backend part 2
+Building a timeline wrapper to isolate external dependencies
+
+
+Some chocolate candy wrappers
+Welcome! This series of blog posts is an endeavor where I walk the reader through building a real, albeit small full-stack application with Rails and ES6. There are no cute or purposefully made-up or contrived examples to aid in blogging, here you get the raw and real deal! If you haven’t yet, read part 1.
+In our first post we thoroughly explored the requirements needed to build a Twitter-based application, and also created a feature spec and a Rails controller to deliver timeline tweets over to our yet-to-be-created frontend client.
+As you might remember, we imagined our controller’s one and only dependency using the programming by wishful thinking technique, and even stubbed it out in our controller spec without it even existing! That dependency is a class which wraps the Twitter gem’s timeline retrieval mechanism and delivers the result in a format our application can easily consume.
+Our controller spec is using a canned timeline response due to our planning ahead of dependency inputs and outputs, which allowed us to create and test our controller totally in isolation. Here’s the planned interface for the wrapper:
+
+The result variable ought to be an instance of the following Struct:
+# Status can be one of: ok, not_found or forbidden
+Struct.new(:status, :tweets)
+Technically, our wrapper is a kind of facade: it reduces dependencies of outside code and avoids them to spread throughout our Rails codebase. That means our application interacts directly with the facade instead of with the gem’s third party code, and most importantly: our facade simplifies and fixes fundamental design mistakes with the Twitter gem; this will become evident later on this post.
+As we are going top-down all the way, we’ll start by determining the dependencies TwitterTimelineHub itself needs.
+The Twitter client factory
+We need to forge a specialized class to hold knowledge about how to create a ready-to-use Twitter client. The reason is simple:
+Configuring a client is a repetitive process that could be abstracted away by a factory.
+Our wrapper needs to have a default twitter_client in case none is specified. It should accept an optional twitter_client in the initializer.
+By default, our factory will pick configuration values from the global environment hash: consumer_key, consumer_secret, access_token and access_token_secret. These values were configured in part 1.
+And of course — we start off with a test. How might we test this? It’s fortunate that Twitter::REST::Client exposes attribute accessors which we can use to query configuration tokens and make sure our instance is correctly configured. Let’s write a spec with just that:
+
+To make this spec pass the following code will suffice:
+
+Now we need another example to make sure missing configuration values are picked up from the ENV hash. Let’s have this example within a new context:
+
+Simple enough. Notice our conservatism when working with ENV variables. Since ENV is global, we must be careful to backup and restore the values between spec runs as to not mess with other examples which may rely on them.
+To make this spec pass we need our code to be aware of the default values:
+
+And here’s what our test runner says, yay!
+TwitterClientFactory
+ when config is not passed
+   picks config values from the environment
+   #call
+     builds a twitter client class with the passed config
+Finished in 0.00576 seconds (files took 0.2973 seconds to load)
+2 examples, 0 failures
+Reviewing wrapper requirements
+Given what has been discussed on our last post, the wrapper class might return a result object containing tweets plus one of the following state symbols: :ok, :not_found or :forbidden. Tweets from these last two states must be an empty collection.
+To implement this confidently we need to find out how twitter client behaves regarding the following timeline states: ok, not_found and forbidden.
+Further spiking out Twitter gem
+Let’s open our trustworthy rails console and see what happens when querying a non-existing timeline. Since we already have a TwitterClientFactory, that’ll be easy as pie:
+> client = TwitterClientFactory.new.call
+> client.user_timeline('i-am-pretty-sure-i-dont-exist-ha!')
+Twitter::Error::NotFound: Sorry, that page does not exist.
+from /Users/thiago/.rbenv/versions/2.3.1/lib/ruby/gems/2.3.0/gems/twitter-5.16.0/lib/twitter/rest/response/raise_error.rb:15:in `on_complete’
+Oops… it throws a Twitter::Error::NotFound exception. And what about when a user forbids access to his timeline? Let’s see:
+> client.user_timeline('mikey')
+Twitter::Error::Unauthorized: Not authorized.
+from /Users/thiago/.rbenv/versions/2.3.1/lib/ruby/gems/2.3.0/gems/twitter-5.16.0/lib/twitter/rest/response/raise_error.rb:15:in `on_complete’
+That’s a Twitter::Error::Unauthorized exception.
+You may have noticed we are taking a different direction with our own design: although these situations are exceptional for the gem, they are not exceptional for our wrapper class; they are just part of the normal workflow. That said, we can visualize our wrapper as an adapter which happens to “fix” these mistakes and massage the data to a format our application can easily consume.
+But that’s not all, there’s still something weird with the twitter gem. Let’s back up for a moment and build a client with invalid configuration:
+> client = TwitterClientFactory.new.call('access_token' => 'invalid')
+=> #<Twitter::REST::Client:0x0055728659b548
+ @access_token="foo",
+ @access_token_secret="your_twitter_access_token_secret",
+ @consumer_key="you_twitter_key",
+ @consumer_secret="your_twitter_secret">
+Now let’s see what happens when querying a valid timeline using invalid configuration:
+> client.user_timeline 'thiagoaraujos'
+Twitter::Error::Unauthorized: Invalid or expired token.
+from /home/thiago/.rbenv/versions/2.3.1/lib/ruby/gems/2.3.0/gems/twitter-5.16.0/lib/twitter/rest/response/raise_error.rb:15:in `on_complete’
+What!!?? That’s the same Twitter::Error::Unauthorized error that we saw before!
+It turns out the gem uses the same kind of exception for when a timeline is forbidden and also when a token is invalid or expired. That means we need to use the exception message in our implementation to figure out which situation it is.
+Now that we know how our client collaborator actually behaves, it’s time to finally implement our wrapper!
+Implementing the wrapper: mocking collaborators
+What immediately comes to your mind when thinking about the timeline wrapper? For me is that it collaborates with a Twitter client object. Let’s analyze how this collaboration might work:
+# We initialize our instance with a collaborator
+twitter_timeline_hub = TwitterTimelineHub.new(twitter_client)
+# A user_timeline message is sent internally to twitter_client
+# Our class wraps and delivers the result
+result = twitter_timeline_hub.call
+# The result is a struct with the following attributes:
+puts result.status # :ok
+puts result.tweets # filtered tweets
+That translates to the following spec example:
+
+I encourage you to keep running this spec while implementing exactly what the error message points at each step. Due to our constraints, we will go straight to the code necessary to make it pass:
+
+And here’s what we get after running our spec again:
+TwitterTimelineHub
+  #call
+    collaborates with twitter_client to get a timeline and delivers a result struct
+Finished in 0.01193 seconds (files took 0.29645 seconds to load)
+1 example, 0 failures
+Awesome! It’s time to work on our first context: when the timeline is found.
+When the timeline is found
+Some Twitter::Tweet objects are likely to be delivered by the underlying client, so we need to traverse Twitter::Tweet relationships and extract exactly what we need from them, as has been determined in our first spike of our first post.
+We need a helper method to stub out the “real” Twitter::Tweet objects:
+
+It will be used only once, but the point is that it makes our spec more readable because it abstracts instance double details which would otherwise make the example rather noisy.
+I would like to note that deep reaching within stubs is generally not a good practice, but here we can assume the gem has a stable enough API that we can trust. We depend on it because there’s no other way around; that’s how the gem has been designed and it’s our role to massage the data to whatever format is needed.
+Our next spec is quite similar to the first one, but we don’t need to mock the collaborator anymore — which means not expecting the collaboration to happen, because that’s already been expected; moreover, we will have it deliver actual tweets instead of an empty collection:
+
+If you are wondering what [foo: ‘bar’] means in Ruby, it’s the same thing as [{ foo: ‘bar’ }]: that is, an array with one object. It’s similar to passing options without brackets to a Ruby method: the options are translated over to a hash.
+Moving this spec to green is quite straightforward:
+
+But the code is a bit crowded… let’s do the TDD refactor step and introduce some private methods to aid in readability:
+
+Awesome, now it looks good and expresses our intent more concisely: we are “filtering” the original Twitter::Tweet objects and transforming them into plain hashes.
+When the timeline is not found or forbidden
+We’ve got other regular cases to deal with: not_found and forbidden. Remember: they’re not exceptional!
+We need to force our fake double to throw a “not found” exception in order to mirror the gem behavior correctly. Here’s the spec for this case:
+
+And a very simple change to the call method makes our spec pass:
+
+The “forbidden” case is very similar, except that the Twitter client behavior is to throw a different exception (unauthorized):
+
+And similarly, we can make it pass with a super straightforward update to the call method:
+
+Notice how the format of our return value is consistent and predictable, which also makes our class easier to reason about — since there are no special nils to deal with.
+But… hold off, we’re not done yet, there’s still an edge case to tackle!
+Treating the edge case of invalid or expired token
+Do you remember that an unauthorized error is thrown by the gem for the “invalid or expired token” situation? Well, if that ever happens we simply want to re-throw the exception instead of assuming that timeline access is forbidden. That case might be rare though, and might only happen with new developers setting up the application. Nevertheless, we want to avoid them a possible debugging headache.
+Let’s write a spec for that. It is similar to the previous one, but it also takes the error message into account and asserts that the exception will be propagated over the call stack — and not swallowed up!
+
+And here’s the complete file with our final implementation:
+
+And it’s finally over 🎉! You can try out the endpoint in Rails console, as to eliminate any skepticism you might have:
+> app.get app.twitter_timeline_path(‘thiagoaraujos’)
+Started GET “/twitter_timeline/thiagoaraujos” for 127.0.0.1 at 2016–10–06 11:15:03 -0300
+Processing by TwitterTimelineController#show as HTML
+ Parameters: {“id”=>”thiagoaraujos”}
+Completed 200 OK in 1209ms (Views: 1.5ms | ActiveRecord: 0.0ms)
+=> 200
+> app.response.parsed_body
+=> {"tweets"=>
+  [{"created_at"=>"2016-10-01T14:36:09.000+00:00",
+    "screen_name"=>"thiagoaraujos",
+    "text"=>"RT @_ericelliott: \"We only hire the best\" hurts recruiting efforts. Hire smart people who love to learn. You'll hire faster and build more…",
+    "mentions"=>["_ericelliott"]},
+  ...]
+> app.get app.twitter_timeline_path('you-wont-find-me-ever')
+Started GET "/twitter_timeline/you-wont-find-me-ever" for 127.0.0.1 at 2016-10-06 11:16:46 -0300
+Processing by TwitterTimelineController#show as HTML
+  Parameters: {"id"=>"you-wont-find-me-ever"}
+Completed 200 OK in 868ms (Views: 0.4ms | ActiveRecord: 0.0ms)
+=> 200
+> app.response.parsed_body
+=> {"tweets"=>[], "status"=>"not_found"}
+But where are our integrations tests?
+Stubs are a great tool for isolated unit testing, designing collaborators and emulating external libraries. It’s worth noting that they provide failure localization — which means a unit test is only bound to fail due to reasons pertaining to the object under test, and never because of defects in its collaborators. Working with stubs is a great design exercise: you can clearly see coupling right in front of your eyes and minimize it to acceptable levels using the feedback you get.
+Were we unit testing our classes with real collaborators, the chances of getting mucky errors would increase considerably and more tests would fail due to the same reasons — since code not related to the unit spec at hand would be part of the bunch. Failure localization mitigates this kind of problem.
+That said, everything has trade offs, and the one with this style of testing is that a thin layer of integration specs is needed in order to prove objects and collaborators communicate as they should — otherwise unit specs may have their value diminished. With one or a few integration specs (without stubs) the testing pyramid becomes complete and most of the behavioral details are gracefully handled by the unit specs.
+But… where’s our integration test? It turns out we already have one! It’s the end-to-end feature spec presented in our first post! It still needs some adjustments, though.
+Wrapping up
+Overall, I hope you have enjoyed the top-down design tips presented here. You can check all the backend code in this GitHub repository.
+But hold off, the best is still to come! We have some cool JavaScript to work out on our next post, and it will be a lot of fun! Thanks for reading, and if you have any questions or noteworthy approaches please leave them in the comments!
+
+SOURCE: https://blog.codeminer42.com/go-full-stack-rails-the-backend-part-2-339db75a5db0#.6p3cnwhbt

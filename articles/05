@@ -1,50 +1,238 @@
-TIL: Action Cable x WebSockets
+Small steps to DRYer RSpec
 
-So I finally had time exploring Rails 5 after quite a busy schedule.
+What?
+RSpec API is constantly evolving towards as DRY and readable DSL as possible. Though, there are several things (tricks and additional methods) that could make your specs even DRYer.
 
-First order of business– check out Action Cable as it seems to be one of the most promising features to Rails 5.
+Warning: While reading, you may feel a temptation to say something like “instead of using this, you’d better redesign your code for testability!” Let’s imagine it was already said, OK?
+How?
+Fancy subjects
 
+subject statement is a really idiomatic addition to modern RSpec, which allows to unambiguosly say what are we testing, and simplify tests afterwards.
 
+# Good and DRY:
+subject { 'foo' }
+it { is_expected.to eq 'foo' }
+Using rspec-its (which was once in RSpec core, but extracted to separate gem in v3), we can do even more inventive checks:
 
-To understand Action Cable, I had to understand WebSockets first.
+# Still good and DRY:
+its(:size) { is_expected.to eq(3) }
+But this approach have some limitations.
 
-WebSockets…wut? 
+subject as Array
 
-Clearly, the online world has been largely built around the traditional request/response paradigm of HTTP. A client loads up a web page and then user needs to click for something to happen next.
+If you want to check (= have a subject) an array of values, there is no idiomatic way to do its-checks on it:
 
-While it has been used by browsers for quite a while, it has its own limitations. User needs to refresh the browser on demand to get updated data. This is not a “problem” per se but in the modern world where the trend is going towards displaying real-time data, it is a demand.
+# We need to repeat `subject` and have long "expect" argument :(
+subject { %w[foo test shenanigans] }
+it { expect(subject.map(&:size)).to include(3) }
+WDYT about this trick?
 
-Enter Polling.
+subject { %w[foo test shenanigans] }
+its_map(:size) { is_expected.to include(3) }
+Implementation (assumes you’ve already required rspec/its and reuses its namespace):
 
-The traditional HTTP solution that people came up with is polling. Polling is enough in situations where a short delay is acceptable, but it’s inefficient because it keeps on requesting regardless if there is new message or not. Not to mention, it scales horribly as clients are growing.
+module RSpec
+  module Its
+    def its_map(attribute, *options, &block)
+      describe("map(&:#{attribute})") do
+        let(:__its_map_subject) do
+          attribute_chain = attribute.to_s.split('.').map(&:to_sym)
+          attribute_chain.inject(subject) do |inner_subject, attr|
+            inner_subject.map(&attr)
+          end
+        end
 
-Enter Long Polling
+        def is_expected
+          expect(__its_map_subject)
+        end
 
-Long polling is a variation of the traditional polling technique. The client requests information from the server in a similar way to a normal poll.  The difference with basic polling? If the server does not have any information available for the client, instead of sending an empty response, the server holds the request and waits for some information to be available. Once it gets hold of a request, it sends back to the client and finishes the request. Repeat.
+        alias_method :are_expected, :is_expected
 
-Enter WebSockets.
+        options << {} unless options.last.is_a?(Hash)
 
-I’ve been reading a lot of articles saying that WebSockets is the future. In simple terms, WebSockets basically allow you to initialize a connection and keep it open. Yeah, persistent connection, rock on. This protocol is well-suited to real-time apps that require constant conversation with the server.
+        example(nil, *options, &block)
+      end
+    end
+  end
+end
+Chains work also:
 
-Real life use case would be… A chat app wherein people get to receive the messages without having to lift a finger.
+its_map(:'chars.first') { is_expected.to include('s') }
+subject as a block
 
+Imagine this code:
 
-So, what’s all the fuss about Action Cable then? 
+describe 'addition' do
+  subject { 'foo' + other }
 
-Action Cable is a wrapper around WebSockets that comes out of the box with Rails 5. Rails peeps decided to include it in the core because of “the increasing need” of such feature.
+  context 'when compatible' do
+    let(:other) { 'bar' }
+    # nice & DRY!
+    it { is_expected.to eq 'foobar' }
+  end
 
-According to the official Action Cable repository,
+  context 'when incompatible' do
+    let(:other) { 5 }
+    # subject is repeated :(
+    it { expect { subject }.to raise_error(TypError) }
+  end
+end
+Wouldn’t it look better this way? (Spoiler: for me, it would.)
 
-Action Cable seamlessly integrates WebSockets with the rest of your Rails application. It allows for real-time features to be written in Ruby in the same style and form as the rest of your Rails application, while still being performant and scalable. It’s a full-stack offering that provides both a client-side JavaScript framework and a server-side Ruby framework. You have access to your full domain model written with Active Record or your ORM of choice.
+subject { 'foo' + other }
+# ...
+context 'when incompatible' do
+  let(:other) { 5 }
+  its_call { is_expected.to raise_error(TypeError) } # OK, it's DRY too now!
+end
+Implementation (assumes you’ve already required rspec/its and reuses its namespace):
 
-Anyway, so Action Cable provides an interface for client-side JS code and server-side Rails code that allows to define a channel for sending and getting data streams.
+module RSpec
+  module Its
+    def its_call(*options, &block)
+      describe("call") do
+        let(:__call_subject) do
+          -> { subject }
+        end
 
-They are claiming that it should be very easy to implement now that it’s built in with Rails.
+        def is_expected
+          expect(__call_subject)
+        end
 
-TIT: Today I Tinkered
+        example(nil, *options, &block)
+      end
+    end
+  end
+end
+Works with tons of useful matchers:
 
-I tried out creating a simple app that exposes the things that I’ve been writing here. Will post things that I learned and push code to Heroku as soon as I have time.
+subject { hunter.shoot_at(:lion) }
+its_call { is_expected.to change(Lion, :count).by(-1) }
+subject as a method
 
-Meanwhile, here’s a gif as a proof of my weekender.
+Imagine you need to test tons of return values of some relatively simple method, in different conditions it should return different results. How you do it?
 
-SOURCE: http://blog.katpadi.ph/til-action-cable-x-websockets/
+it { expect(fetch(:age)).to eq 30 }
+it { expect(fetch(:weight)).to eq 50 }
+it { expect(fetch(:name)).to eq 'June' }
+# .... do you see a pattern here?..
+What about this? (Note, that it is just rspec + rspec/its, no additional code needed):
+
+subject { ->(field) { fetch(field) } }
+
+its([:age]) { is_expected.to eq 30 }
+its([:weight]) { is_expected.to eq 50 }
+its([:name]) { is_expected.to eq 'June' }
+It “just works”, because the form its([arg]) calls [] on subject, and Ruby’s Proc defines [] as a synonym to .call!
+
+Note: Another way to test the same subject is update its_call above to accept arguments, like its_call(:age) { is_expected.to eq 30 }.
+Fun with matchers
+
+Both ideas in this section are already considered and rejected by RSpec maintainers. But it doesn’t mean they are absolutely useless (TBH, I find them both much clearer than those preferred by maintainers).
+
+Negations
+
+RSpec allows logical matchers composition to some extent, with negations (.not_to), and .and/.or chaining. Unfortunately, currently there is no way to say “to this and not that” (because of long discussion of scope ambiguity).
+
+Currently, this solution is considered standard:
+
+RSpec.define_negated_matcher :not_to_change, :change
+
+# ...
+
+expect { action }.to change(Goods, :amount).by(1).and not_to_change(Money, :amount)
+Most of the time it is good enough, though considered awkwardly complicated by some (including me, I saw codebases, where change matcher negations were defined in tens of files, with different names).
+
+So, here is naive remedy:
+
+require 'rspec/matchers'
+
+module RSpec
+  module Matchers
+    module BuiltIn
+      class Not < BaseMatcher
+        def initialize(matcher)
+          @matcher = matcher
+        end
+
+        def description
+          "not #{@matcher.description}"
+        end
+
+        def match(_expected, actual)
+          !@matcher.matches?(actual)
+        end
+
+        def supports_block_expectations?
+          @matcher.supports_block_expectations?
+        end
+      end
+    end
+
+    module Composable
+      def and_not(matcher)
+        BuiltIn::Compound::And.new(self, BuiltIn::Not.new(matcher))
+      end
+    end
+  end
+end
+Now you can just
+
+expect { action }.to change(Goods, :amount).by(1).and_not change(Money, :amount)
+Method expectations
+
+Again, there is long-living (yet hard for me to follow) discussion why “expect some code to call some methods on some objects” is the only RSpec check that can’t be expressed in a single statement.
+
+Currently, you can do:
+
+# either
+expect(obj).to receive(:method)
+some_code
+
+# or
+obj = spy("Class")
+some_code(obj)
+expect(obj).to have_received(:method)
+For me, neither look “atomic” enough. So, the solution:
+
+RSpec::Matchers.define :send_message do |object, message|
+  match do |block|
+    allow(object).to receive(message)
+      .tap { |m| m.with(*@with) if @with }
+      .tap { |m| m.and_return(@return) if @return }
+      .tap { |m| m.and_call_original if @call_original }
+
+    block.call
+
+    expect(object).to have_received(message)
+      .tap { |m| m.with(*@with) if @with }
+  end
+
+  chain :with do |*with|
+    @with = with
+  end
+
+  chain :returning do |returning|
+    @return = returning
+  end
+
+  chain :calling_original do
+    @call_original = true
+  end
+
+  supports_block_expectations
+end
+Now, you can just:
+
+# arguments order like in change() matcher
+expect { some_code }.to send_message(obj, :method).with(1, 2, 3).returning(5)
+
+# works great with aforementioned its_call
+subject { some_code }
+it { is_expected.to send_message(obj, :method).with(1, 2, 3).returning(5) }
+Nifty, ha?
+
+Some final notes
+I use all of code snippets shown above in my everyday work, and they show themselves as working and helpful. Though, it may be other way for you. In any case, notice that implementations are working, yet naive (or “naive, yet working” if you want). I gathered all of them in witty-named repo, but still haven’t made in proper gem with tests and docs and stuff. Though, you already can use it from GitHub (it has a proper gemspec), and say me what you think.
+
+SOURCE: http://zverok.github.io/blog/2017-01-22-dry-rspec.html

@@ -1,0 +1,49 @@
+Get to know your twiddle wakka.
+
+If you’ve worked on a Rails app or a Ruby library you’ve most likely come across this way of specifying Rubygems dependencies:
+
+gem 'library', '~> 2.4'
+That squiggly operator is very common as Rails ships its default Gemfile with lines like that and a lot of open source libraries are using it. But it’s easy to use it incorrectly and not as you intended. Let’s take a look.
+
+The twiddle-what?
+Rubygems calls it a pessimistic version constraint: It’s a strategy that allows you to depend on future versions of a dependency as long as they only include minor updates. It puts an upper bound on where to stop when the gem releases a new major version. You know you are ok with the everything >= 2.4.0, but you’re not sure what will happen in version 3.0.0. This pattern assumes the dependency is using Semantic Versioning, where breaking changes are only introduced in major versions:
+
+Given a version number MAJOR.MINOR.PATCH, increment the:
+
+MAJOR version when you make incompatible API changes,
+MINOR version when you add functionality in a backwards-compatible manner, and
+PATCH version when you make backwards-compatible bug fixes.
+So in theory your app should work fine with all minor and patch level releases of a dependency if you’re using the official APIs. In practice this can break down of course if the maintainer makes a mistake and overlooks something. That’s why you still have to test your app with any new version of your dependencies (which is exactly what Depfu does for you, btw).
+
+Rubygems introduced a shortcut for specifying this pessimistic version constraint:
+
+gem 'library', '>= 2.4.0', '< 3.0'
+like this:
+
+gem 'library', '~> 2.4'
+With a dedicated operator for the pattern, Rubygems is recognizing it as very common and encourages its use. It also pushes the whole ecosystem towards Semantic Versioning. Which is a good thing.
+
+“Pessimistic version constraint” is a bit of a mouthful but there doesn’t seem be a clear winner as a shorter name for the shortcut operator. Rubygems says it’s commonly known as the twiddle-wakka, but after an informal survey with my coworkers I’m not so sure I have the same definition of common. I guess we should just call ourselves extremely lucky the term “spermy operator” didn’t catch on.
+
+I do not think it means what you think it means
+So far so good. Looking through a decent amount of Gemfiles from both apps and libraries I noticed this a lot:
+
+gem 'library', '~> 2.4.0'
+Looks similar at first, but notice it has the patch level version in there, which was dropped in the previous example. It actually resolves into this:
+
+gem 'library', '>= 2.4.0', '< 2.5.0'
+Is that what you wanted? Are you sure? Either you trust the dependency to follow Semantic Versioning or you don’t. If you do there is no need to be afraid of minor versions. If you don’t you should probably just specify the exact version and don’t bother with the twiddle-wakka.
+
+This is like the pessimists version of the pessimistic version constraint.
+
+Let’s spell out all the possible ways to use the twiddle-wakka:
+
+Version spec  Actual range
+~> 2.4.0  >= 2.4.0 and < 2.5.0
+~> 2.4  >= 2.4.0 and < 3.0
+~> 2  >= 2.0 and < 3.0
+In most cases you should drop the patch level version and let SemVer do its thing. But as always: there are exceptions. Rails being the main one as it is not following SemVer and can have breaking changes in minor releases. Having the patch-level version in the twiddle-wakka is correct for Rails and gems that are using a similar release strategy. Because Rails is such a big part of the ecosystem, my guess is that that’s also where most of the confusion comes from.
+
+But Rails it not all there is in Ruby and most gems do try to follow SemVer correctly, so let’s also use the twiddle-wakka correctly. If everyone does, the accountability for maintainers to think a bit about their releases grows and the ecosystem as a whole profits!
+
+SOURCE: https://depfu.io/blog/2016/12/14/get-to-know-your-twiddle-wakka

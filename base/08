@@ -1,0 +1,173 @@
+Go Full Stack Rails: The Backend part 1
+Working on the backend, exploring requirements and building a Rails controller to deliver timeline tweets
+
+
+Being a great developer these days means to intelligently use available technologies to build full-fledged products that also feel durable and extendable, and gone are the days when JavaScript was an afterthought or something to be hidden from view or simply an unfortunate kind of “asset” less important than server code. Or bluntly saying: “my JavaScript codebase is a pile of untested crap and its spaghetti structure makes me cry, but unfortunately I need it!”.
+No more of that, my friend! The landscape has changed and we can now count on great tools to hone our craft. On one hand there’s Rails: it’s mature, battle-tested, flexible and gets the job done; on the other hand there’s ES6, which leveled up JavaScript as a language and made it a lot more expressive, manageable and fun to work with. You also can’t ignore the JavaScript community and its strong ecosystem of software packages, and there’s no better way to get access to the latter than by means of the NPM registry. Any other sort of glue should feel fragile, limiting or outdated with regards to NPM offerings.
+One of the cons of Rails is its dated asset pipeline — I won’t get into the why, but we have much better alternatives nowadays such as webpack. Despite its slightly complicated configuration file, technically it’s a dream come true and the good news is that’s it’s possible to replace the asset pipeline with it — and with that comes the whole JavaScript ecosystem and a set of first class tools that we can use directly on the command line.
+And that’s where we are standing now! This is an opinionated tutorial on building a complete, albeit small web application with the technologies we’ve discussed so far. Get ready for lots of code coming up ahead! We will use code42template to generate an initial application—this is simply a beefed-up “rails new” command featuring the webpack module bundler and Ruby/JavaScript test suites working out of the box, effortlessly, with opt-in Heroku configuration!
+What we will build
+I picked a small application to be presented over the course of a few posts, with the goal of exercising our full-stack abilities. Besides coding, we will also go through the whole development process, dependencies, requisites, and using the libraries we need to accomplish our goals.
+We’ll kick-off every part of the app with a spec, but only once we’re confident that we know what the subject is and how it’s supposed to work. So, I also hope to instill a mindset of seeking to learn about the app’s domain and any other requisites before attempting to write code, which is of uttermost importance! Of course, in the real world requisites aren’t always clear — but we need to get things going with at least some domain knowledge and be able to adapt our code to new information whenever it comes to the forefront.
+Right on, here’s the application mockup:
+
+This seems to be simple enough to implement, but there are plenty of decisions to take and lots of paths to explore in order to get there. Among many valid ways of structuring our application, we’ve chosen to have a Rails API endpoint to serve the timeline tweets and a JavaScript client to consume them.
+Note that we won’t present the full application on this post; instead we’ll start off with the backend part and end up with some Rails controller code. We assume the application will be maintained over the long term, therefore quick and thoughtless hacking is not a valid means to our ends!
+As is the case with most code tutorials out there, this is an opinionated tutorial. You may not possibly agree with some choices I make, but hopefully you’ll find it worth reading! I won’t be excessively thorough in my explanations, but provide just enough to make my point clear — given you understand some basic Ruby, Rails and TDD.
+Enough said, let’s get going!
+Installing code42template and generating an application
+Start by taking a look at code42template’s README file and make sure you’ve got all of the requirements in place to generate an application with Heroku support, then simply install the gem:
+gem install code42template
+Use the following command to generate a barebones app:
+$ code42template YOUR_APP --skip-active-record --heroku true
+Replace YOUR_APP with whatever name you wish, but be aware that the following URLs must not be registered by other users within Heroku: “YOUR_APP-staging” and “YOUR_APP-production”.
+It may take a while to run, but after it finishes you can perform a sanity check to make sure everything is OK with your brand new app. The “rake health” command is provided by the generator and it runs all specs, security checks, style guide checks, linter checks and so on:
+$ cd twitter_widget
+$ rake health
+If all is right we can finally git commit and start focusing on the core of our business right away, since the generator has already taken care of most mundane details for us!
+Configuring the twitter gem and creating an online Twitter app
+We will use the twitter gem to interface with the actual Twitter API, due to its stability and for being around for long enough. Let’s include it in the main section of our Gemfile:
+gem 'twitter', '~> 5.16.0'
+And now bundle update to reconcile the dependencies — this is needed because there are conflicts between twitter and some of the basic gems provided by the template:
+bundle update
+The twitter gem requires you to create an actual app at twitter.com:
+Head over to http://apps.twitter.com and login.
+Click on “Create New App” button.
+Fill in the required fields and wait until the app gets created.
+Click on “Keys and Access Tokens” tab.
+Click on “Generate My Access Token”.
+While in the same tab take note of the following information:
+Consumer Key (API Key)
+Consumer Secret (API Secret)
+Access Token
+Access Token Secret
+Now we can shove these four keys within the .env.development file, which may hold our app’s environment configuration for use in development:
+TWITTER_CONSUMER_KEY=your_consumer_key
+TWITTER_CONSUMER_SECRET=your_consumer_secret
+TWITTER_ACCESS_TOKEN=your_access_token
+TWITTER_ACESS_TOKEN_SECRET=your_access_token_secret
+Great, now we are ready to open up a Rails console and start a spiking session. Our goal is to learn more about the features that we need from this gem.
+Twitter gem spike
+By peeking at the gem’s README file, we learn how to instantiate a Twitter Client for fetching tweets of a timeline. Let’s create a client object and configure it with the environment variables which were defined in the previous section:
+❯ rails console
+Running via Spring preloader in process 7499
+Loading development environment (Rails 5.0.0.1)
+> client = Twitter::REST::Client.new do |config|
+*   config.consumer_key = ENV[‘TWITTER_CONSUMER_KEY’]
+*   config.consumer_secret = ENV[‘TWITTER_CONSUMER_SECRET’]
+*   config.access_token = ENV[‘TWITTER_ACCESS_TOKEN’]
+*   config.access_token_secret = ENV[‘TWITTER_ACCESS_TOKEN_SECRET’]
+* end
+=> #<Twitter::REST::Client:0x007fc70d839fd8
+ @access_token=”my_access_token”,
+ @access_token_secret=”my_access_token_secret,
+ @consumer_key=”my_consumer_key”,
+ @consumer_secret=”my_consumer_secret”>
+Now that the client is configured, we can send the client#user_timeline message to obtain tweets of a timeline straight from Twitter:
+> client.user_timeline('thiagoaraujos')
+=> [#<Twitter::Tweet id=781638312868077568>,
+ #<Twitter::Tweet id=780941487907430400>,
+ # …]
+This line of code returns the first n Twitter::Tweet objects of my timeline. Given the elements in our reference mockup such as text, date, mentions, etc, take a look at the documentation API for this class and notice that it lists our main methods of interest: text, created_at, user and user_mentions. Let’s check them out:
+> tweet = client.user_timeline.first
+=> #<Twitter::Tweet id=781638312868077568>
+> tweet.text
+=> “RT @ReinH: If you’re having trouble learning CSS, please understand that this is because CSS is terrible, not because you are terrible.”
+> tweet.created_at
+=> 2016-09-28 01:25:34 +0000
+> tweet.user_mentions
+=> [#<Twitter::Entity::UserMention:0x007ff7a4e227c0
+  @attrs={:screen_name=>"ReinH", :name=>"Senior Oops Engineer", :id=>10255262, :id_str=>"10255262", :indices=>[3, 9]}>]
+> tweet.user_mentions.map(&:screen_name)
+=> ["ReinH"]
+> tweet.user
+=> #<Twitter::User id=265411188>
+> tweet.user.screen_name
+=> "thiagoaraujos"
+Great, now we’re onto something! Can we throw this code in our controller somehow and call it a day? Probably, but we want to hold our dependencies under control and not let them slip away into a mess.
+That’s why we’ll add a bit of structure around the gem’s functionality, starting off the process with a feature spec!
+The feature spec
+This spec is conceptually meant to prove all components of our application are wired up correctly, though we haven’t got any at this point! Its role is to warn us about when code implementation finally comes to an end, which will happen at the time our feature is complete.
+Here’s the simplest requirement we can have:
+When a user visits the home page, ensure at least two tweets get displayed on the screen.
+Without further ado, this translates to the following feature spec:
+
+We are using data attributes as to allow our future JS app to hook into the markup.
+Now that we have an actual spec, let’s run it:
+$ bundle exec rspec spec/features/twitter_timeline_spec.rb
+This command fails loudly; you might see the following error message in your terminal:
+undefined local variable or method `root_path’
+Fortunately, it tells us where to go next: we need to create a root route in our Rails application:
+
+And we’ll also go ahead of our TDD workflow and create a home controller:
+
+Our controller does not need an index action because Rails skips it in case it finds the view and the action does not exist.
+Now it’s time to create a view. Given our requirements, let’s create an index.html.erb file with as much markup as we can:
+
+Run the spec again and notice the error message will change, which is a good sign:
+expected to find css “.tweet” at least 2 times but there were no matches
+We went thus far using pure dumb markup, but tweets ought to be injected by an actual implementation. That obliges us to mark our spec as pending, so that our test runner doesn’t bother us with failures anymore:
+
+Now we’ve got a goal to seek and a test to alert us in the future about feature completion!
+The Timeline Controller
+We need a controller responsible for delivering tweets in JSON format over to our frontend application. Before starting to code, it’s very important to gather some basic requirements.
+Gathering requirements
+Let’s stop for a moment and think about the API that we need here; a Twitter timeline can be in 3 expected states:
+Found (ok): the timeline is public
+Not found (not_found): the timeline does not exist
+Forbidden (forbidden): the timeline is not public
+Any other state apart from this triad might be considered exceptional. For our API it means these three states might deliver a 200 response. There’s absolutely no need to map the states one-to-one to HTTP 404 (not found) and 403 (forbidden) responses, because we don’t want expected situations to trigger any kind of special treatment to whoever consumes the API.
+And how about the data, what exactly do we need? A JSON object with the following attributes is more than sufficient to cover our needs:
+{
+  "status": "ok",
+  "tweets": [
+    {
+      "screen_name": "joe",
+      "text": "Hi @bob, I am Joe!",
+      "mentions": ['bob']
+      "created_at": "2016-01-01T00:00:00.000-02:00"
+    }
+  ]
+}
+This represents an “ok” response, but what about “not_found” and “forbidden” responses? For consistency’s sake they ought to deliver an empty collection of tweets. We want to render tweets regardless of which kind of timeline comes up — whether an empty collection or not. By having these situations within the expected realm, our business logic becomes very simple.
+Stubbing out controller dependencies
+We want our controller to be thin and only deal with delegating work and sending over responses to the frontend client. Therefore, we need a wrapper object to communicate with the Twitter API: let’s call it TwitterTimelineHub.
+Conceptually, this object is responsible for wrapping the gem’s Twitter client within a convenient interface and return whatever the controller needs in a consumable format.
+Let’s exercise what is popularly known as programming by wishful thinking and imagine our object’s API beforehand. It could very well look like this:
+
+The “result” variable can be an instance of a struct instead of a plain hash, hence much more expressive:
+Struct.new(:status, :tweets)
+Hola! Due to the force of our imagination we can now confidently drive out our design and create a controller spec without having an actual dependency!
+Onto the controller code
+Here’s all the work our controller needs to perform:
+Receive an id parameter with the desired screen name (timeline)
+Delegate timeline retrieval to a specialized wrapper object
+Send out the timeline result as a JSON response
+Let’s call our controller TwitterTimelineController: it will have a RESTFUL show action and deliver in JSON format whatever TwitterTimelineHub happens to return.
+We only need one spec to prove this interaction works as it should; notice we are stubbing out our yet-to-be-created dependency with some spec helper methods, also taking into account the contract we’ve defined:
+
+It’s important to note our controller does not care for what content status and tweets may have — all it cares is to convert them out to JSON. Nevertheless, it’s a good practice to have fixtures as close as possible to real data for documentation purposes.
+Run the spec and you will see the following error:
+uninitialized constant TwitterTimelineHub
+That means we need to introduce an empty TwitterTimelineHub class in the “models” folder with the bare minimum in order to avoid instance_double calls complaining about its absence:
+
+When running it again, the error message says a controller is missing:
+NameError: uninitialized constant TwitterTimelineController
+Let’s create an empty TwitterTimelineController to satisfy this error message:
+
+Run it again and you will get this error:
+NoMethodError: undefined method `twitter_timeline_path’
+Since the error message is asking for a route that doesn’t exist, let’s go ahead and create it. Our routes.rb file will end up looking like this:
+
+Now we can go straight to implementing our simple controller:
+
+Run the spec again to get a well deserved trophy:
+TwitterTimelineController
+  delivers whatever timeline TwitterTimelineHub returns as JSON
+Finished in 0.28947 seconds (files took 7.27 seconds to load)
+1 example, 0 failures
+Have you noticed what we just did? We were able to design and implement our controller in isolation, without even having an actual dependency! It’s clean and focused code, thanks to our good will of imposing constraints and thoroughly thinking about our problem upfront. Of course, in the real world this is an imperfect process — but notwithstanding a great exercise.
+To be continued…
+We kicked-off our app and covered a lot of ground already! On our next post (already online) we will work on a wrapper to isolate external dependencies and keep everything under control. If you’ve made this far thanks for reading, and if you have anything to say leave it up in the comments :)
+
+SOURCE: https://blog.codeminer42.com/go-full-stack-rails-the-backend-a94b4d0e8897#.yxneqb7on

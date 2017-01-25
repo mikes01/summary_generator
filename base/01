@@ -1,0 +1,39 @@
+Why you should keep your dependencies up to date
+
+It’s Friday, 4pm. Becky and Tim just wrapped up a code review on a feature they’re going to demo during the next sprint review. Becky quickly checks her email. She plans on heading home soon. Tonight she’ll see a band she really likes and she’s already a bit giddy.
+
+There’s a new email, the subject starts with [CVE…]. Uh-Oh. A Rails security advisory. The title is “Unsafe Query Generation Risk in Active Record” - She shows the email to Tim and they discuss if their app is going to be affected. As much as they both would like to deny it, they come to the conclusion that immediate action is needed.
+
+At first they try to simply update the Rails version to the patch version stated in the security advisory. This fails, because it conflicts with a bunch of other dependencies. So the list of dependencies they have to upgrade grows and grows. The clock is ticking. The concert starts at 8pm. Suddenly, things start to get hectic. Suddenly, the test suite is full of deprecation warnings and 2 failures appear out of nowhere, because a sub dependency changed its behavior in a very subtle way. Communication starts to reduce to the utterance of four letter words. The clock is still ticking.
+
+Sounds familiar?
+Having to fix an urgent security problem under pressure is always tough. It’s also very risky, because your focus suddenly shifts from “let’s ship stable, well-tested software” to “let’s see how we can get this security update out of the door in a way that doesn’t blow up over the weekend”.
+
+If, instead of fixing that one security hole, you have to update one or two handfuls of other dependencies, both the time needed and the involved risks can increase exponentially.
+
+Having your dependencies more or less up to date should make that security update much more straight forward. You’re much less likely to run into dependency errors (By which I mean: updating one dependency fails because another dependency depends on the old, or an older version of the dependency) and thus you keep the scope of the update small.
+
+Reality check
+Let’s be honest - In most projects updating dependencies is something that only happens every few months or even less often, mostly only when the main framework (Rails for example) gets updated or in one of those terrible Friday evening security update sessions.
+
+And I get it. Updating dependencies is not fun. There’s no gratification except for a lousy badge on your repo README, maybe. Also, this is another one of those “code hygiene” tasks that often get sacrificed for that important new feature.
+
+So, why is it important to update dependencies on a regular basis? There’s the security angle, which I’ve already touched on, but there’s more to it - Non security bug fixes are important, too. Performance improvements are worth looking at. And maybe a new feature on that one gem makes a task you’re doing much easier and allows you to refactor some code you usually sniffed at from a safe distance. And often, new versions add deprecation warnings, so that you can fix your code while there still is time and thus massively reducing the amount of work coming with the next major upgrade.
+
+Not so fast, grasshopper
+Of course, sometimes you simply can’t upgrade some dependencies. Updating a Rails app from 4.0 to 5.0 is a major undertaking and almost a project on it’s own. Sometimes you end up with a weird combination of several gems that simply won’t work together. Even worse, sometimes you end up in a position where one gem in a newer version wants a specific minimum ruby version, but you can’t deploy that ruby version because of, well, reasons. And sometimes, software doesn’t only get better - If you are old enough to remember the performance regressions Rails 3 had over Rails 2, that was a pretty ugly burden to bear. If you’re running your project on a low budget, such a performance regression might simply not be tolerable.
+
+The best way to deal with all of this is to do dependency updates frequently, in very small batches (ideally with batch size = 1). Updating a single dependency (and, by definition, it’s sub-dependencies) is much easier than updating 20 dependencies at once. Given you have a strong test suite, updating a single dependency could be as easy as running something like bundle update <gem name> && rake test .
+
+As always, automating this as far as possible would be even better. While tools like “bundle outdated”, gemsurance or even the commercially available tools give you a quick way of looking at what needs updating, knowing, as the saying goes, is only half the battle.
+
+Here’s where Depfu comes in
+Whenever a gem is updated, Depfu opens a branch that contains the needed changes to your Gemfile and Gemfile.lock. The branch then will be tested on your CI infrastructure so that you can be confident that your software still runs with that new version. We then open up a pull request that allows you to merge the changes with a click of a button in case of no test failures.
+
+If tests fail, we’ll let you know as well, because it might point to problems that you should attend rather earlier than later.
+
+Learn more about Depfu and how to join the private beta.
+
+So, how would that story go? Usually, Rails patch updates are relatively painless if the rest of the dependencies are in good shape. Running the tests might pop a few new deprecation warnings, but of course that’s something you wouldn’t necessarily address on a Friday night. The Depfu PR probably roughly arrived at the same time as the CVE email. A good test suite ensures the app is still working. A click of a button, a deployment to a staging server, the usual few reassuring clicks through the application, deploying to production and enjoying a great concert of your favorite band to close off a busy and productive work week.
+
+SOURCE: https://depfu.io/blog/2016/12/01/why-you-should-keep-your-dependencies-up-to-date

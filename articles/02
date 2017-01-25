@@ -1,27 +1,66 @@
-Our Path to MVP: Choosing Rails
-Ruby was the first language that made me feel like I could be a programmer. I’d always sorta tried to learn programming — I got books from the mall bookstore “Teach Yourself C++ in 24 Hours”, “Learn Java in 7 Days”, etc. I don’t think I learned anything from them.
-I found out about Ruby around 9 years ago from a blog post on digg.com. Ruby just clicked with me — I now felt like a programmer. Shortly after discovering Ruby, I found Rails.
-RAILS_GEM_VERSION = ‘1.2.3’
-That’s how long I’ve been working with Rails.
-I haven’t been totally faithful. I’ve looked at other Ruby frameworks (also Python and Node.js), I’ve even tried a few. But at least on the Ruby side of things, I’ve always ended back on Rails. I wouldn’t call myself a “fanboy”, though. There’s plenty that I don’t like — the asset pipeline is still odd and migrations still don’t feel quite right. But when I try to move fast in something else, it always feels so slow.
-# I have a lot of ideas for projects:
-dev $ ls rails -l | wc -l
-39
-dev $ ls rails -l | wc -l
-51
-The process I usually go through is to just start building something, and then I use that early work to validate the idea in my head — if the idea is good; I keep going, if it’s bad I throw it out. Speed is where Rails shines for me, and not speed in the sense that you often hear about with every new web framework or programming language. Speed in the sense of how long it takes me to get the idea that’s in my head, out into the real world, clickable, and functioning.
-The State of Building Things
-A lot of folks have moved away from Rails. That’s not surprising, as languages and frameworks come and go, and things move really fast in the development world.
+Scale your Elasticsearch queries with filtered aliases
 
-https://www.codementor.io/learn-programming/javascript-trends-skills-developers-should-learn
-I’ve been doing Node.js develoment for the last two years, and before that I’d only used Node where I thought it was appropriate. Those last two years have been interesting. React showed up and sorta turned everything upside down. Coffeescript sorta died, and ES6 and Typescript came along. Functional programming is all the rage, and object oriented code is “old”.
-None. Of. This. Matters. To. Me.
-I like building stuff. The stuff, the “thing”, is why I became a programmer, not because I like computer science. Programming gave me a way to make things happen on a computer — something I’d always wanted to be able to do, but hadn’t figured out how.
-This isn’t to say that I don’t think the way things are going is cool or exciting. React is interesting, and it feels more “right” than “wrong” to me. And it is painful to go back to regular ole JS after using ES6 for a few years. But when I have to spend too much time getting things setup to work, and even more time trying to debug things when they are finally setup, it starts to get in the way of me making things — that’s a problem for me.
-Minimally Viable Product
-The idea behind an MVP is to get something out there quickly, with limited features, and use that product to learn what works and what doesn’t. While Rails makes development fast, you can still probably take any expected product launch “timeline” and double it. Even then, you’re likely still gonna be off.
-Speed is so important for an MVP. Well, speed and sanity. Fighting with emerging technologies, or major version bumps that deprecate APIs you’ve invested time into, usually isn’t the best choice for speed or sanity.
-We chose Rails for WorkWeek because we’re a small team trying to launch a product, not because it’s the hottest framework or technology, and not because it’ll look good on a resume.
-Maybe Node, Elixir, etc. are the right choice for you. They certainly appeal to the engineer in me, but when you’re working on a product and want to get it out the door, you have to give up that desire to use the new hotness and think pragmatically, or you may never get it done. For me, nothing compares to Rails.
+Elasticsearch is a great data store for implementing full-text search and analytics. If your use case warrants it, I would highly recommend using it. That said, there are certain applications where you need to be careful how you go about indexing your data.
+User-based data flow
+Suppose you are a huge medical insurance company with millions of customers, and for each customer you have reams of patient data. Now suppose you’d like to be able to efficiently search that patient data and you decide to use Elasticsearch. How would you go about doing this?
+A logical approach would be to store each patient data under its own patient index. My patient data would be stored under my index, and your patient data would be stored under your index. This is known as the user-based data flow.
+Having an index per patient works if the number of patients is not too large. But our insurance company has millions of patients, which means it also has millions of Elasticsearch indices. In this scenario, Elasticsearch would slow to a crawl.
+There is a solution: We can trick the user into thinking we have an index per patient by using index aliases. Aliases are basically names that map to a specific index. In our case, we have millions of aliases mapping to a handful of primary indices. From a user perspective, each of these aliases looks like an individual index.
+Some examples with code
+In the following code examples, I’m using Ruby 2.3.3 and Elasticsearch version 2.4.2. Ruby has an excellent Elasticsearch gem that makes it easy to demonstrate what’s going on. The documentation for this gem is also very good. I’m running Elasticsearch locally on port 9200.
+Let’s require the Elasticsearch gem and Ruby’s JSON library, and make sure our Elasticsearch instance is up and running.
 
-SOURCE: https://medium.com/@trvsdnn/our-path-to-mvp-choosing-rails-f3d5de198df#.e77cm0gfh
+Running client.info gives us the following result:
+pry(main)> client.info
+=> {"name"=>"Dredmund Druid",
+ "cluster_name"=>"elasticsearch_mkim",
+ "cluster_uuid"=>"f19ZvZWLTsaJeUM9ww1nQw",
+ "version"=>
+  {"number"=>"2.4.2",
+   "build_hash"=>"161c65a337d4b422ac0c805f284565cf2014bb84",
+   "build_timestamp"=>"2016-11-17T11:51:03Z",
+   "build_snapshot"=>false,
+   "lucene_version"=>"5.5.2"},
+ "tagline"=>"You Know, for Search"}
+Now we need to create the primary index that all the aliases will reference. I’m calling this index patients. I couldn’t find a convenient command in the Elasticsearch gem to perform a basic PUT HTTP request, so for these types of requests I’m resorting to using Faraday. (If anyone is aware of a command, please feel free to post in the comments.)
+
+Now let’s create aliases for two patients named PatientA and PatientB.
+
+As you can see, the alias mapping is done through the patient_name field. For those still following, you may have noticed that there is an extra routing field in the request body. This field is important and I’ll explain why next.
+Typically, patient data would be stored in several different shards. When a search is performed within a particular patient’s data, Elasticsearch would need to search several different shards and then combine those results. This is inefficient. A better way would be to store all the data for a specific patient in one shard. Elasticsearch allows us to do this through routes. By providing a specific route, Elasticsearch will know to store a particular patient’s data in the shard specified by the route. That’s what the routing field is for.
+We are now ready to store some documents for each patient. In a production setting, we may be storing huge amounts of data. We can improve indexing performance by disabling refresh and using the bulk API. Even though this example is using a tiny data set, I’ll use both refresh disabling and the bulk API for demonstration purposes.
+
+Now we can perform the search!
+pry(main)> client.search index: 'patients', q: 'content:The quick brown'
+=> {"took"=>4,
+ "timed_out"=>false,
+ "_shards"=>{"total"=>5, "successful"=>5, "failed"=>0},
+ "hits"=>
+  {"total"=>1,
+   "max_score"=>0.26442188,
+   "hits"=>
+    [{"_index"=>"patients",
+      "_type"=>"patient_type",
+      "_id"=>"AVkBDPk-1ECoVlT3taI2",
+      "_score"=>0.26442188,
+      "_routing"=>"PatientA",
+      "_source"=>{"patient_name"=>"PatientA", "content"=>"The quick brown fox"}}]}}
+pry(main)> client.search index: 'PatientA', q: 'content:The quick brown'
+=> {"took"=>2,
+ "timed_out"=>false,
+ "_shards"=>{"total"=>1, "successful"=>1, "failed"=>0},
+ "hits"=>
+  {"total"=>1,
+   "max_score"=>0.26442188,
+   "hits"=>
+    [{"_index"=>"patients",
+      "_type"=>"patient_type",
+      "_id"=>"AVkBDPk-1ECoVlT3taI2",
+      "_score"=>0.26442188,
+      "_routing"=>"PatientA",
+      "_source"=>{"patient_name"=>"PatientA", "content"=>"The quick brown fox"}}]}}
+Notice that when we performed the search on the primary index patients we can see that all five shards were involved in the search. When we searched on the alias PatientA only one shard was used. It looks like the aliasing is working. It also looks like the routing is working since only one shard was used when searching with the alias.
+Conclusion
+If you expect to have a very large amount of data stored in your Elasticsearch instance, you will need to use filtered index aliases with routing, otherwise your cluster’s performance will degrade significantly.
+
+SOURCE: https://blog.fluentz.io/scale-your-elasticsearch-queries-with-filtered-aliases-e659c542e8ee#.of5sgl91f

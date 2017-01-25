@@ -3,6 +3,11 @@ require 'pragmatic_tokenizer'
 require 'lemmatizer'
 
 class Article
+  SQL_QUERY_REGEXES = [/(INSERT INTO)(.*)(VALUES)(.*)(RETURNING)(.*)/,
+    /(SELECT)(.*)(FROM)(.*)/,
+    /(UPDATE)(.*)(SET)(.*)(WHERE)(.*)/,
+    /(DELETE FROM)(.*)(WHERE)(.*)/].freeze
+
   def initialize(path, title = nil)
     text = File.read(path)
     self.sentences = extract_sentences(text)
@@ -28,7 +33,13 @@ class Article
   end
 
   def extract_sentences(text)
-    PragmaticSegmenter::Segmenter.new(text: text).segment[0..-2]
+    sentences = PragmaticSegmenter::Segmenter.new(text: text).segment[0..-2]
+    [].tap do |checked_sentences|
+      sentences.each_with_index do |sentence, index|
+        next if detect_sql_query(sentence) || detect_repeated_sentences(sentences, index, sentence)
+        checked_sentences << sentence
+      end
+    end
   end
 
   def tokenizer
@@ -38,5 +49,23 @@ class Article
       hashtags: :keep_and_clean, mentions: :keep_and_clean, clean: true,
       classic_filter: true, punctuation: :none, minimum_length: 3
     )
+  end
+
+  def detect_sql_query(sentence)
+    is_sql_query = false
+    SQL_QUERY_REGEXES.each do |regex|
+      is_sql_query = !regex.match(sentence).nil?
+      break if is_sql_query
+    end
+    is_sql_query
+  end
+
+  def detect_repeated_sentences(sentences, index, sentence)
+    sentences.each_with_index do |sentence_from_article, article_index|
+      if index != article_index && sentence == sentence_from_article
+        return true
+      end
+    end
+    false
   end
 end

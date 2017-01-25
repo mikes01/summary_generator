@@ -1,39 +1,123 @@
-Why you should keep your dependencies up to date
+Speeding Up Bulk Imports in Rails
 
-It’s Friday, 4pm. Becky and Tim just wrapped up a code review on a feature they’re going to demo during the next sprint review. Becky quickly checks her email. She plans on heading home soon. Tonight she’ll see a band she really likes and she’s already a bit giddy.
+This article is about speeding up bulk imports in Rails. Let’s imagine we have 50,000 products to import… not an absurd amount, but enough that we can start to notice some pain and enough that we wouldn’t want to keep the user sitting there while the system tries to import them all.
+That is unless we can figure out a way to have these records imported quickly.
 
-There’s a new email, the subject starts with [CVE…]. Uh-Oh. A Rails security advisory. The title is “Unsafe Query Generation Risk in Active Record” - She shows the email to Tim and they discuss if their app is going to be affected. As much as they both would like to deny it, they come to the conclusion that immediate action is needed.
+The Data We’re Working With
+We’ll be working with a Product model which has the columns: sku, name, origin, and msrp_cents. To populate our database, we receive a nightly dump from the manufacturer which arrives to us as a CSV file. The data looks like this:
+0abcd,0 Product,China,3000
+1abcd,1 Product,Mexico,4000
+2abcd,2 Product,Canada,2000
+3abcd,3 Product,USA,5000
+4abcd,4 Product,Canada,4000
+Here is the schema:
+create_table "products", force: :cascade do |t|
+  t.string   "sku",        null: false
+  t.string   "name",       null: false
+  t.string   "origin",     null: false
+  t.integer  "msrp_cents", null: false
+  t.datetime "created_at", null: false
+  t.datetime "updated_at", null: false
+end
 
-At first they try to simply update the Rails version to the patch version stated in the security advisory. This fails, because it conflicts with a bunch of other dependencies. So the list of dependencies they have to upgrade grows and grows. The clock is ticking. The concert starts at 8pm. Suddenly, things start to get hectic. Suddenly, the test suite is full of deprecation warnings and 2 failures appear out of nowhere, because a sub dependency changed its behavior in a very subtle way. Communication starts to reduce to the utterance of four letter words. The clock is still ticking.
+add_index "products", ["sku"], name: "index_products_on_sku", unique: true, using: :btree
+The data is obviously fake. But that doesn’t matter, the principle is the same. The only validation our model has is that it requires the sku field to be unique, and the other fields to not be null.
+Attempt 1 – The original (59 seconds)
 
-Sounds familiar?
-Having to fix an urgent security problem under pressure is always tough. It’s also very risky, because your focus suddenly shifts from “let’s ship stable, well-tested software” to “let’s see how we can get this security update out of the door in a way that doesn’t blow up over the weekend”.
+My first attempt was the most straight-forward attempt… nothing fancy is going on. I’m taking the CSV file, looping over the records and saving them.
+task import_products1: :environment do
+  require 'csv'
 
-If, instead of fixing that one security hole, you have to update one or two handfuls of other dependencies, both the time needed and the involved risks can increase exponentially.
+  CSV.foreach("#{Rails.root}/tmp/products.csv") do |p|
+    product = Product.new(sku: p[0], name: p[1], origin: p[2], msrp_cents: p[3])
+    product.save!
+  end
+end
+Running this with the time program produces the following output:
+rake speedy:import_products1  59.45s user 4.44s system 77% cpu 1:22.59 total
+Is 59 seconds fast? Slow? At this point we don’t really know. But let’s take a look at what’s going on for each of the records.
+(0.1ms)  BEGIN
+Product Exists (0.6ms)  SELECT  1 AS one FROM "products" WHERE "products"."sku" = '123' LIMIT 1
+SQL (0.3ms)  INSERT INTO "products" ("sku", "name", "origin", "msrp_cents", "created_at", "updated_at") VALUES ($1, $2, $3, $4, $5, $6) RETURNING "id"  [["sku", "123"], ["name", "n"], ["origin", "Russia"], ["msrp_cents", 1000], ["created_at", "2015-12-05 01:34:41.896705"], ["updated_at", "2015-12-05 01:34:41.896705"]]
+(6.1ms)  COMMIT
+Here is what’s happening step by step:
+BEGIN starts a database transaction. If there is a failure of any kind it will run the ROLLBACK command to avoid finalizing these changes in the database.
+Next because we have a uniqueness validation in the model, it is querying to check if this sku already exists.
+At this point it does the actual insert statement, inserting the data into the database.
+Because there were no failures, it runs COMMIT to finalize all changes made within this database transaction.
+What we don’t see is that there is a lot going on behind the scenes as well. Rails is having to talk over TCP to the database four times for each record, plus it is having to build two different SQL statements, each time. Luckily, this last part is quick thanks to some work by Tenderlove on AdequateRecord Pro where the query construction is cached.
+ New Call-to-action
+Attempt 2 – Rely on DB for unique validation (44 seconds)
 
-Having your dependencies more or less up to date should make that security update much more straight forward. You’re much less likely to run into dependency errors (By which I mean: updating one dependency fails because another dependency depends on the old, or an older version of the dependency) and thus you keep the scope of the update small.
+The first thing we’ll do to speed up the import is to rely on our database to ensure the skus are unique rather than on Rails. This will allow us to avoid that extra SELECT statement from being run.
+You should always have a unique index on any field you want to actually be unique. Rails will do its best, but it can’t guarantee uniqueness due to race conditions.
+“Always have a unique index on any field you want to actually be unique.” -via @leighchalliday
+CLICK TO TWEET
+The migration to add this unique index looks like this:
+add_index :products, [:sku], unique: true
+If there is failure, it will raise an ActiveRecord::RecordNotUnique exception which you can rescue from. To avoid this validation run, we could send the save! method the option validate: false, but this would stop all validations from being run, not just the one we want to avoid.
+Below is a technique for avoiding a single validation. It creates an attr_accessor called skip_uniqueness, which we use in conjunction with the unless option that we can pass to the validates method.
+class Product < ActiveRecord::Base
+  attr_accessor :skip_uniqueness
+  validates :sku, uniqueness: true, unless: :skip_uniqueness
 
-Reality check
-Let’s be honest - In most projects updating dependencies is something that only happens every few months or even less often, mostly only when the main framework (Rails for example) gets updated or in one of those terrible Friday evening security update sessions.
+  def save_for_bulk_import!(options = {})
+    self.skip_uniqueness = true
+    save! options
+  end
+end
+Using this technique, we created our own version of the save! method which sets the skip_uniqeness attribute to true, thereby skipping the uniqueness validation.
+And finally, here’s the code that was run to produce this result:
+task import_products2: :environment do
+  require 'csv'
 
-And I get it. Updating dependencies is not fun. There’s no gratification except for a lousy badge on your repo README, maybe. Also, this is another one of those “code hygiene” tasks that often get sacrificed for that important new feature.
+  CSV.foreach("#{Rails.root}/tmp/products.csv") do |p|
+    product = Product.new(sku: p[0], name: p[1], origin: p[2], msrp_cents: p[3])
+    product.save_for_bulk_import!
+  end
+end
+Now after running the import, we get a time of 44 seconds… about 15 seconds faster than the original!
+rake speedy:import_products2  44.10s user 3.56s system 78% cpu 1:00.57 total
+Attempt 3 – Wrap it in a transaction (34 seconds)
 
-So, why is it important to update dependencies on a regular basis? There’s the security angle, which I’ve already touched on, but there’s more to it - Non security bug fixes are important, too. Performance improvements are worth looking at. And maybe a new feature on that one gem makes a task you’re doing much easier and allows you to refactor some code you usually sniffed at from a safe distance. And often, new versions add deprecation warnings, so that you can fix your code while there still is time and thus massively reducing the amount of work coming with the next major upgrade.
+The way we have our code now, each of the 50,000 products gets its own database transaction. This is how Rails handles saving a model by default… unless of course we wrap it in our own transaction, a single one that we can use for all 50,000 records.
+This means that if there is any failure, none of them will be inserted.
+task import_products3: :environment do
+  require 'csv'
 
-Not so fast, grasshopper
-Of course, sometimes you simply can’t upgrade some dependencies. Updating a Rails app from 4.0 to 5.0 is a major undertaking and almost a project on it’s own. Sometimes you end up with a weird combination of several gems that simply won’t work together. Even worse, sometimes you end up in a position where one gem in a newer version wants a specific minimum ruby version, but you can’t deploy that ruby version because of, well, reasons. And sometimes, software doesn’t only get better - If you are old enough to remember the performance regressions Rails 3 had over Rails 2, that was a pretty ugly burden to bear. If you’re running your project on a low budget, such a performance regression might simply not be tolerable.
+  Product.transaction do
+    CSV.foreach("#{Rails.root}/tmp/products.csv") do |p|
+      product = Product.new(sku: p[0], name: p[1], origin: p[2], msrp_cents: p[3])
+      product.save_for_bulk_import!
+    end
+  end
+end
+Now when we run the code we see that it is down to 34 seconds… another 10 seconds faster!
+rake speedy:import_products3  34.14s user 1.47s system 89% cpu 39.696 total
+Attempt 4 – Bulk insert (4.6 seconds)
 
-The best way to deal with all of this is to do dependency updates frequently, in very small batches (ideally with batch size = 1). Updating a single dependency (and, by definition, it’s sub-dependencies) is much easier than updating 20 dependencies at once. Given you have a strong test suite, updating a single dependency could be as easy as running something like bundle update <gem name> && rake test .
+Our code is still having to connect to the database 50,000 times. I had a feeling this was the real reason for slowness, because if I instantiate 50,000 products without saving them, the script only takes about 5 seconds.
+To solve this, let’s take advantage of something both MySQL and PostgreSQL support: Inserting multiple values with a single INSERT statement.
+INSERT INTO films (code, title, did, date_prod, kind) VALUES
+    ('B6717', 'Tampopo', 110, '1985-02-10', 'Comedy'),
+    ('HG120', 'The Dinner Game', 140, DEFAULT, 'Comedy');
+As with many things in Ruby, there is a gem that helps us do this called activerecord-import. Now we’ll read all of the products into an array and insert them into the database all at once:
+task import_products4: :environment do
+  require 'csv'
 
-As always, automating this as far as possible would be even better. While tools like “bundle outdated”, gemsurance or even the commercially available tools give you a quick way of looking at what needs updating, knowing, as the saying goes, is only half the battle.
+  Product.transaction do
+    products = CSV.read("#{Rails.root}/tmp/products.csv")
+    columns = [:sku, :name, :origin, :msrp_cents]
+    Product.import columns, products, validate: false
+  end
+end
+This lowers our code all the way down to 4.6 seconds!
+Keep in mind that in this case I’ve turned off validations entirely. As a result, you should be sure that your incoming data is valid, maybe running it through a cleanse phase before getting to this point. That being said, even by running the validations, it ran in about 25 seconds, which is the second fastest time I was able to get.
+rake speedy:import_products4  4.64s user 0.30s system 75% cpu 6.527 total
+Conclusion
+Take advantage of your database! It’s very efficient at what it does, and by relying on its functionality, you’ll be able to figure out different ways to make your code more efficient.
+Take advantage of your database! Rely on its functionality to make your code more efficient.
 
-Here’s where Depfu comes in
-Whenever a gem is updated, Depfu opens a branch that contains the needed changes to your Gemfile and Gemfile.lock. The branch then will be tested on your CI infrastructure so that you can be confident that your software still runs with that new version. We then open up a pull request that allows you to merge the changes with a click of a button in case of no test failures.
+In this article, we relied upon our not-null database constraints along with a unique index, and then we used the ability to insert multiple records with a single SQL query. All in all, we were able to get 50,000 records into the database from 59 seconds all the way down to 4.6 seconds, around 12 times faster.
 
-If tests fail, we’ll let you know as well, because it might point to problems that you should attend rather earlier than later.
-
-Learn more about Depfu and how to join the private beta.
-
-So, how would that story go? Usually, Rails patch updates are relatively painless if the rest of the dependencies are in good shape. Running the tests might pop a few new deprecation warnings, but of course that’s something you wouldn’t necessarily address on a Friday night. The Depfu PR probably roughly arrived at the same time as the CVE email. A good test suite ensures the app is still working. A click of a button, a deployment to a staging server, the usual few reassuring clicks through the application, deploying to production and enjoying a great concert of your favorite band to close off a busy and productive work week.
-
-SOURCE: https://depfu.io/blog/2016/12/01/why-you-should-keep-your-dependencies-up-to-date
+SOURCE: https://blog.codeship.com/speeding-up-bulk-imports-in-rails/

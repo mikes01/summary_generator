@@ -1,0 +1,50 @@
+TIL: Action Cable x WebSockets
+
+So I finally had time exploring Rails 5 after quite a busy schedule.
+
+First order of business– check out Action Cable as it seems to be one of the most promising features to Rails 5.
+
+
+
+To understand Action Cable, I had to understand WebSockets first.
+
+WebSockets…wut? 
+
+Clearly, the online world has been largely built around the traditional request/response paradigm of HTTP. A client loads up a web page and then user needs to click for something to happen next.
+
+While it has been used by browsers for quite a while, it has its own limitations. User needs to refresh the browser on demand to get updated data. This is not a “problem” per se but in the modern world where the trend is going towards displaying real-time data, it is a demand.
+
+Enter Polling.
+
+The traditional HTTP solution that people came up with is polling. Polling is enough in situations where a short delay is acceptable, but it’s inefficient because it keeps on requesting regardless if there is new message or not. Not to mention, it scales horribly as clients are growing.
+
+Enter Long Polling
+
+Long polling is a variation of the traditional polling technique. The client requests information from the server in a similar way to a normal poll.  The difference with basic polling? If the server does not have any information available for the client, instead of sending an empty response, the server holds the request and waits for some information to be available. Once it gets hold of a request, it sends back to the client and finishes the request. Repeat.
+
+Enter WebSockets.
+
+I’ve been reading a lot of articles saying that WebSockets is the future. In simple terms, WebSockets basically allow you to initialize a connection and keep it open. Yeah, persistent connection, rock on. This protocol is well-suited to real-time apps that require constant conversation with the server.
+
+Real life use case would be… A chat app wherein people get to receive the messages without having to lift a finger.
+
+
+So, what’s all the fuss about Action Cable then? 
+
+Action Cable is a wrapper around WebSockets that comes out of the box with Rails 5. Rails peeps decided to include it in the core because of “the increasing need” of such feature.
+
+According to the official Action Cable repository,
+
+Action Cable seamlessly integrates WebSockets with the rest of your Rails application. It allows for real-time features to be written in Ruby in the same style and form as the rest of your Rails application, while still being performant and scalable. It’s a full-stack offering that provides both a client-side JavaScript framework and a server-side Ruby framework. You have access to your full domain model written with Active Record or your ORM of choice.
+
+Anyway, so Action Cable provides an interface for client-side JS code and server-side Rails code that allows to define a channel for sending and getting data streams.
+
+They are claiming that it should be very easy to implement now that it’s built in with Rails.
+
+TIT: Today I Tinkered
+
+I tried out creating a simple app that exposes the things that I’ve been writing here. Will post things that I learned and push code to Heroku as soon as I have time.
+
+Meanwhile, here’s a gif as a proof of my weekender.
+
+SOURCE: http://blog.katpadi.ph/til-action-cable-x-websockets/

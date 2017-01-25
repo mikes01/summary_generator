@@ -1,127 +1,73 @@
-Go Full Stack Rails: The Frontend part 1
-A brief introduction to test-driven frontend development
+Bundler and Gemfile best practices
 
+Do you remember the time before Bundler existed? That was fun wasn’t it? Bundler was released in 2010 and it’s hard to overstate how important it has become for the Ruby ecosystem. Everyone is using it for their Ruby apps and their Ruby open source libraries.
 
-In “The Backend” part 1 and part 2 we pondered over the design of an endpoint to serve timeline tweets to a frontend client. On this post, we will resume our full-stack journey and start implementing the code to consume and present those tweets, and it will be written in ES6 JavaScript.
-You may be curious to know which framework we’ve chosen to power our application: is it React, Angular, Vue, Backbone, Ember, or another one? We must use a framework, right? It usually takes time to come up with an answer to this question, but I already have one: React is an excellent view framework and would be the choice of most modern JavaScripters out there, but let us take a different direction here.
-It turns out that what we need to accomplish is quite simple, and given our requirements we don’t need the weight of a framework — it would probably be overkill! Furthermore, I don’t want to burden the reader with too many concepts at once — our focus shall be directed towards the JavaScript language and its raw power.
-For this simple app, I find it much more valuable to use the organizational features provided by ES6 together with some small utility libraries. That said, we will come up with a simple and straightforward organization scheme and follow a few sensible conventions to guide our way.
-By the way, have you ever wondered about which problems a framework like React solves for you? The best way to find out is to experiment and properly build apps without any frameworks. Chances are you won’t find their additional baggage and/or complexity worth in a lot of cases! Moreover, you will learn the essential technologies powering the JavaScript ecosystem.
-Even though some frameworks force you to turn your app into an SPA, there is no need to do that without a strong reason involved in the decision — and with having Rails at our disposal, our app can become a healthy mixture of server-side rendered pages and JavaScript components. By properly breaking up our frontend logic we can achieve an abstraction much akin to a “component”.
-For this part of the tutorial, I expect you to be acquainted with the basics of JavaScript and ES6. Now let’s move on and take a look at the aforementioned conventions.
-Our coding conventions
-I’ve come up with three simple conventions as part of this exercise:
-Stick with simple functions unless a class makes sense
-JavaScript is a different kind of object oriented language and its most powerful building block is the function. You will be surprised to acknowledge that we hardly need the shape of “classic” objects on this application. Our functions should aim to be highly specialized and strive to do one thing only.
-export default function singlePurposeFunction() {
-  # my code here
-}
-Use a bootstrap file to mount components
-A bootstrap file is any file meant to initialize an application or part of its functionality, much like C’s “main” function.
-Our Twitter Timeline component will provide a “mounter” function and readability will be its main selling feature: programmers who read this file will have a high-level overview of everything the component does, in just a few lines of code. The body will contain no logic whatsoever, just function calls and some glue code where needed.
-export default function mountComponent() {
-  executeStep1();
-  executeStep2();
-  bindSomeEvent();
-  # other readable, high-level steps
-}
-We should never let this file grow out of bounds, for it would be a sign that the mounter is doing more than it’s supposed to do — which suggests the introduction of new abstractions.
-Reference DOM nodes only within the bootstrap file
-Functions should not hard code any DOM nodes; preferably, these nodes should come in as exclusive arguments of the mountComponent function — which in turn should delegate them down to other smaller functions.
-The goal is to make code decoupled and reusable, which also provides nice side effects on tests. Small measures such as these are generally beneficial in the long run in order to keep a healthy system.
-About JavaScript specs
-The code42template application generator uses mocha as its JS test framework and karma + PhantomJS as its test runner.
-You might recall from our first post that we generated the skeleton of our Twitter-based application using code42template. Check it out if you haven’t already!
-PhantomJS is a headless browser; in our case it provides a full-fledged environment upon which to run integration specs. How does the mocha + PhantomJS combo work? The test environment starts out with a bare HTML document including the mocha.js script tag, a naked body tag and some code to trigger the execution of found spec examples. That said, it’s not a good idea to rely on any global state in your specs because the environment only boots up once.
-First and foremost, let’s aim to write an integration spec for our Twitter-based app. JS integration specs are slightly similar to Capybara end-to-end specs, but they are isolated from the backend and thus run much faster and reliably than the former. What does that mean? It means our application is conceptually decoupled from the server and can be mounted anywhere, as long as a minimal skeleton template is provided in the HTML.
-Before delving into our app, let’s learn how to write an integration spec.
-The outline of a frontend integration spec
-Every mocha spec follows an outline that is similar to the following:
-Describe a subject using a describe function.
-Declare shared setup variables at the top of the describe function.
-Initialize shared setup using a beforeEach function.
-Tear down shared setup using an afterEach function.
-Have any number of examples in as many it functions as needed.
-The setup steps are optional. I recommend using them to share environment configuration required by all spec examples.
-Show me some code!
-Imagine we want to test a function that receives the price of some cart items and renders the total price on the screen. This function is naturally “integrated”, since it deals with two responsibilities and one of them is intrinsic to the browser environment: calculate a total price and render it out on the screen. For this reason, it’s a great candidate to be exercised by an integrated test.
-What is the goal of this spec? We simply want to assert that the total price gets correctly displayed in a DOM node of our choice upon calling the subject function.
-Without further ado, here’s the spec code:
+But are you actually specifying your Gemfile correctly? Investing a little bit of time and effort will decrease the likelihood of ending up with a outdated web of dependencies where no one knows why you’re using all these gems in the first place.
 
-Three aspects are specially noteworthy here:
-The shared setup scheme creates and destroys DOM nodes around every example. We call these special nodes “fixtures”.
-createFixture is a small in-house function responsible for creating a fixture div tag into the DOM tree with any custom HTML we want.
-We are using the chai BDD expect interface to obtain a syntax very similar to RSpec’s. It needs to be explicitly imported in every spec file.
-Watch out: the DOM is global! If you ever forget to clean it up, other specs onward may get in deep trouble! Removing the fixture node altogether provides a clean environment for subsequent specs to run upon.
-Now let’s see what our spec looks like in action! First of all, we need to define a createFixture helper method to be used by the spec. Create the following file at the pointed out location:
+Here are a few recommendations:
 
-As you can see, this file holds no mystery; it uses the global document object provided by the browser environment to create and insert the fixture node into the DOM tree. It also defines a destroy function dynamically as a property of the fixture object, so that it’s easier to destroy the fixture at the teardown step.
-Now copy the spec file over to spec/javascripts/integration/example.spec.js and run it:
-$ npm run test:integration
-The resulting output might look slightly polluted until you get used to it, but scroll up a little bit and you will see the following error message:
-1) calculates and displays the cart total
- renderCartTotal
- Can’t find variable: renderCartTotal
-That means we need to implement a renderCartTotal function. Write the following code at the top of the spec file, after the import statements:
+Gemfile.lock is for apps, not libraries
+This seems commonly known by now: If you’re working on a application, like a Rails app, you want to have the exact same dependencies on your developer machine, the CI server and the production environment. That’s what the Gemfile.lock is for. After updating your Gemfile, always run bundle install. And after bundling, always check your Gemfile.lock into version control.
 
-This is just a contrived example, so don’t take it for real world code! Notice our use of “reduce” to swiftly sum up the numbers of the array.
-Now run the spec again and rejoice!
-renderCartTotal
- ✓ calculates and displays the cart total
-That’s awesome! We now have a working JavaScript spec, and despite its “integrated” nature it was quite easy to write!
-Our first actual integration spec
-It’s time to get back to our app and work on its first integration spec.
-Before doing that, I’d like to introduce you to sinon: a popular mocking/stubbing swiss army-knife which comes baked into code42template. And not only that: the sinon project provides a very cool feature: the fake server. Let’s learn what it is and where we can use it.
-The sinon fake server
-Sinon Fake Server works by stubbing out the native XMLHttpRequest JavaScript APIs, so that it’s possible to simulate AJAX requests and make them return “canned” responses. Since every third-party HTTP client library must go through this lower level API, fake server should automatically work with all of them! Examples of third-parties are jQuery’s ajax method and the standalone axios library.
-Using fake server is simple: provide the request and response details, trigger it out, and the canned response will kick in once a matching request gets performed anywhere in the application:
+If you writing a library you want it to work with a wide range of dependency versions. As that allows users of your library to install it without getting conflicts. So a Gemfile.lock is the opposite of what you want. Put the Gemfile.lock into your .gitignore to make sure you don’t push it.
 
-It’s worth noting that AJAX requests are asynchronous, and with sinon we can respond to them whenever we want.
-On the example above we assume that performRequest() performs a non-blocking AJAX request behind the curtains, which means that while other code executes, the request keeps on waiting until a response arrives, then it handles the response asynchronously using a callback. When using sinon fake server, it’s mandatory to manually trigger the response using server.respond().
-Onto the code
-As noted in part 1, our application needs to render a default timeline upon initialization. The first step in that direction is to write a full integration spec describing part of the feature. How might we do that?
-As you may have already guessed, we need to stub out the timeline endpoint developed in part 1 using the fake server. We’ll do that by simulating a response with two tweets and an “ok” status, and in the end we’ll assert whether the DOM has the right contents. Seems easy enough, huh?
-For now, it makes a lot of sense for each tweet to have the following HTML structure:
-<div class="tweet"><p>Hey there!</p></div>
-There are other elements to a tweet such as “date” and “mentions”, but let’s not worry with them right now. Notwithstanding, our fake response will still contain all of them and we shall fill these gaps in the upcoming posts!
-Hopefully, the following spec will look familiar to you:
+Only specify top-level dependencies
+Most gems that you declare in your Gemfile have dependencies themselves. Bundler automatically resolves and installs them so there is no need for you to declare them yourself. You’ll make Bundlers life much harder once you start declaring sub-dependencies, especially when you specify a version. You’ll very likely run into more and more Bundler::DependencyErrors and it will become much harder to upgrade dependencies at all. Bundler is very good at finding a set of versions that fit all the requirements your dependencies specify, there is no need for you to do Bundlers job yourself.
 
-Notice that "mountComponent” explicitly receives as a parameter the DOM node holding our HTML template, as explained up above in “Our Coding Conventions”.
-Basically, here’s what this spec does:
-Injects the HTML fixture into the DOM tree.
-Instantiates a fake server.
-Simulates a request to the twitter_timeline/thiagoaraujos endpoint and makes it receive a fake response matching the format of the real backend.
-Mounts the component: it’s assumed that mountComponent performs an AJAX request internally and the request’s callback uses the response to render tweets on the screen.
-Triggers server.respond(), thus delivering the fake response over to the request’s callback.
-Selects all tweets from the DOM using the global document object and runs expectations on their length and text.
-But why are we using setTimeout? Good question! Do you recall that AJAX requests are asynchronous? So, that’s exactly the reason why we are going through this trouble. We must wait until the request’s bound callback receives and renders out the response.
-Also, notice the done parameter at the it function’s signature... what does it even mean? Unfortunately, it returns before setTimeout starts running, but with done we can trick mocha into waiting for our signal. Its optional presence means: “hey mocha, there’s some asynchronous code in this example, but wait until I tell you it’s finished running!”. And by calling done() we are saying: “hey mocha, my async code is over and my assertions have been run, now go ahead and gather the spec results!”.
-In the next posts we will refactor the code to not use setTimeout, which seems like a smell.
-And what if we hadn’t call done()? In that case, the spec would have timed out after 2 seconds!
-On the other hand, the complete absence of a done callback would have told mocha that results can be “gathered” as soon as the it function returns. Had we not used it, mocha would have assumed the example’s completion before any assertion had run, which means our spec would have erroneously passed with 0 expectations.
-Let’s get back on track and run the spec with npm run test:integration. You’ll see the following error message after that:
-Can’t find variable: mountComponent
-It seems pretty obvious, let’s create a “naked” mountComponent function at the pointed out location:
+Once you start using one of these already installed sub-dependencies directly in your own code, you should add it to your Gemfile. This makes it explicit you’re depending on that gem and everything will continue to work even if the top-level dependency stops using it.
 
-And finally, we need to import the mountComponent function into the spec. Add the following line at the top of the spec file, below the other import statements:
- import mountComponent from 'app/twitter/mountComponent';
-After running the spec again a new kind of error pops up:
-expected { length: 0, item: [Function: item] } to have a length of 2 but got 0
-Awesome, that’s our first actual spec failure — it means there are no tweets rendered after running the code, which is correct! We can make it pass right away by introducing the following code in the mountComponent function:
+Use Gemfile groups
+A modern Rails app has a lot of dependencies, but quite a few of them are only relevant to speed up the development process or provide tools for debugging and testing. None of them are needed when running the app on production. Put all those dependencies in a development group and make sure your deployment script runs bundler in the right way for production (Capistrano and Heroku do the right thing by default).
 
-mountComponent
-    ✓ renders an initial timeline
-What’s next?
-OK, this is probably a silly way to make the spec pass, but at least it will remain green until we need to take the next big step, which is when we’ll get back to this code again! Most importantly, it forces us to reflect about what comes next:
-Fetch timeline tweets from the server
-Render tweets on the screen
-How beautiful would our code look like if it had the following appearance?
-fetchTimelineTweets(id).then(renderTweets);
-The actual code won’t look exactly like this, but it seems like a great idea to try and improve! It’s beneficial to plant in ourselves the ability to imagine how code will look like beforehand; if it’s not clean or readable enough or if it does not fit into the requirements, it can probably be improved.
-Wrap up… for now
-This introduction focused a lot on the basics and hadn’t really a lot of code other than specs. Nevertheless, I hope you have enjoyed it!
-In the next post we will continue our journey and work on smaller functions that’ll make our spec pass for real, and also introduce you to some libraries and modern JavaScripts concepts such as promises.
-Until then, happy hacking!
-If you have any questions or suggestions just hit me up in the comments!
+But don’t overdo it with how many groups you declare. Special groups for development and test make sense (even though you could also argue for merging them together). But more groups than that rarely help. The main goal is to minimize the amount of code that needs to be loaded in the production environment. The more groups you have the more you have to think which group a gem belongs to and the harder it is to understand which gem gets loaded when.
 
-SOURCE: https://blog.codeminer42.com/go-full-stack-rails-the-frontend-part-1-1b889c919b4a#.4j33tz1d4
+Consistent formatting
+What’s valid for your code is also valid for your Gemfile: keep the formatting and syntax consistent. For example:
+
+Prefer blocks over single line group definitions:
+group :development do
+  gem 'web-console'
+  gem 'spring'
+end
+instead of
+
+gem 'web-console', group: :development
+gem 'spring', group: :development
+Use proper indentation so that groups are easy to identify
+Use single quotes as there is no need for string substitutions
+Keep your whitespace in check
+Are you the type of person that sorts their bookshelf alphabetically, by genre or by color? Then sorting the gems in your Gemfile might be nice as well. You can use logical groups like “3rd party APIs”, “data access” and “logging/performance” or anything else you can think of. It makes it easier for other developers to see what a gem is used for and if they add a gem they know where to put it.
+
+Resist the urge to Ruby
+The Gemfile is a Ruby DSL, which means you can use all language features of Ruby. But just because you can, doesn’t mean you should. The Gemfile declares your dependencies, let’s keep it simple and easy to reason about. Just because this
+
+gem 'rollbar'
+gem 'lograge'
+gem 'sidekiq'
+gem 'octokit'
+seems a bit repetitive doesn’t mean there is a need to “DRY” it up like this
+
+%w(rollbar lograge sidekiq octokit).each { |name| gem name }
+Yes it’s a single line now, but it falls down as soon as you need to specify versions, set require paths or when you want to move the gems into groups. It also makes it harder to get an overview which gems are declared as you loose the uniformity. I think NPM got this right when they made their manifest file pure JSON.
+
+Minimize git dependencies
+Rubygems allows you to depend on a Rubygem directly via Git (and Github). It’s handy for when you have to fork a gem and don’t want to release a real Rubygem or if you need an unreleased feature or bugfix from the official repository. Since this is so easy it’s very tempting to do it all the time, but specifying dependencies as git urls is problematic for a number of reasons:
+
+First, it can become a maintenance nightmare, as your fork slowly becomes out of date or merging in the upstream changes becomes much more work than creating an orderly pull request to the original project. Second, you’re effectively switching from using easy to understand and follow version numbers to git commit hashes. So updating a git dependency usually involves comparing the lastest version on master or a branch against the hash you have in your bundle. (bundle show shows you git hashes for git dependencies) instead of just glancing at version numbers. Instead of semantic versioning, this is more like cryptographic versioning.
+
+And also, of course you can show that you’re a good open source citizen by taking that bug that made you fork and use the git url, write some regresssion tests for it and make that pull request. People are always quite happy when that happens.
+
+Do you really need that gem?
+Adding a new dependency to your project should be a very deliberate choice. It comes with a cost and not always is the benefit of not having to write that code yourself big enough to justify introducing a dependency.
+
+Every dependency in your application has the potential to bloat your app, to destabilize your app, to inject odd behavior via monkeypatching or buggy native code.
+There is much more to this topic than we can cover in a paragraph here, luckily Mike Perham already wrote a great post about it: Kill Your Dependencies.
+
+Support Ruby Together
+A lot of companies depend on Bundler and RubyGems — would your app run without it? Yet very few realize most of the work to support this critical Ruby infrastructure has been largely done by volunteers. Ruby Together is a grassroots initiative that is trying to make this work sustainable. Membership dues directly fund work that benefits everyone using Ruby and are usually tax-deductible. Let’s improve Ruby, together!
+
+Summary
+It’s very easy for your Gemfile to accumulate more and more cruft. Especially in a team with multiple developers. You can end up in a web of outdated dependencies, old gems that are actually not needed anymore and Rails processes taking 100s of megabytes of RAM. It only takes a little bit of effort to improve things. Taking care of your Gemfile with basic hygiene and some ongoing love will make life for future you much easier.
+
+SOURCE: https://depfu.io/blog/2017/01/18/bundler-and-gemfile-best-practices
+

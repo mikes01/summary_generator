@@ -1,35 +1,90 @@
-Rails feature that you've never heard about: schema cache.
+How To Test Ruby CLI: The Setup
 
-I’ve been doing Rails development already for more than five years and only now I learned about the schema cache, although this feature is mostly relevant for apps under the massive scale.
+One of the most interesting challenges I met during Hanami development is to write isolated integration tests. The framework ships with an extensive Command Line Interface (CLI) to generate (or destroy) code, start the server, open a Ruby (or a database) console, create/drop the database, run the migrations, precompile assets, and print informations.
 
-What is it for?
-On boot, the Rails process makes SHOW FULL FIELDS query to get information about the database structure and columns types. This is required in order to know that the created_at column is DATETIME and we have to cast all values as a date time objects.
+Full Isolation
 
-Now imagine that you have a hundred of Unicorn processes and you restart them in your production cluster. Every process will query MySQL with the same query: SHOW FULL FIELDS. Keep in mind that this query is quite expensive because it’s not optimized as may be SELECT with an index.
+As I want to have integration tests to use CLI commands for real, the test suite is free of mocks/stubs. When I ran it, only real commands are executed against the shell.
 
-A hundred application servers all making an expensive query at the same time may also kill your database! To avoid it, Rails provides with the schema cache feature. The idea is:
+In this realistic scenario, I can’t use fixtures: the cost of maintaining them is too high. Instead, each single spec generates at the runtime a new Hanami project (via hanami new) with a given set of preconditions.
 
-Serialize data about the schema (tables, columns, and types) into a file
-Distribute that file over all application servers
-Load the data from file to avoid hitting the database
-Here is the chart with a number of queries not using index: you can totally see the moment when we enabled the schema cache!
+You may want to use pry as gem of choice for your Hanami console, or precompile sass assets. Did you forget to create the database before to migrate? There is a test for that!
 
+There is only one way to guarantee correctness for these specs, and it is to run them in full isolation. The ci script looks for all the specs in spec/integration and it runs them one by one via rspec path/to/my_spec.rb. This is important: each spec uses its own fresh Hanami project in a separated Ruby process.
 
+Preparatory Steps
 
-Implementation
-In Rails <= 5.0, schema cache is serialized and persisted in Marshal. In Rails 5.1, I changed schema cache to use YAML to preserve compatibility of serialized cache between different Rails version.
+This is a basic integration test to verify that the CLI command hanami version will print the current Hanami version.
 
-Schema cache is enabled by default for all Rails apps, but it won’t be used unless you have prepared the dump file on your app server with rake db:schema:cache:dump.
+RSpec.describe 'hanami version', type: :cli do
+  it 'prints current version' do
+    with_project do
+      run_command 'hanami version', "v#{Hanami::VERSION}"
+    end
+  end
+end
+When the build starts there are a lot of preparatory steps. Let’s see what happens before this spec is executed.
 
-Anyway, the SchemaCache class is only 100 LOC and I suggest that you check it out.
+Hanami uses Bundler to manage development dependencies. I want to use the “under-development” version of each Hanami framework. To do that, here’s how I declare the dependency:
 
-Why you may need it?
-Using schema cache may not be worth it with only a couple of application servers, but you may start using it as you scale your app and the number of Unicorns grows.
+# Gemfile
+# ...
+gem "hanami-utils", github: "hanami/utils"
+This specifies to use hanami-utils from the GitHub repository, instead of the latest version from Rubygems. Bundler will clone the repository and hanami-utils source code will be copied in a directory.
 
-Further reading
-rails/rails#5162
-rails/rails#17632
-rails/rails#27042
-I have a plan to write more about Rails features that are not well known. Please let me know if you are interested in this topic.
+But in order to make the tests real, I want to install Hanami frameworks as a gem, instead of using their code from a directory.
 
-SOURCE: http://blog.iempire.ru/2016/12/13/schema-cache/
+For this purpose the ci script runs bundle package --all. This command copies all the gems (*.gem) into vendor/cache. For all the dependencies declared with :github, it copies the updated repository into vendor/cache as well.
+
+Here’s a simplified version of Hanami Gemfile:
+
+# Gemfile
+source "https://rubygems.org"
+
+gem "i18n"
+gem "hanami-utils", github: "hanami/utils"
+
+# ...
+That Bundler command will copy vendor/cache/i18n-0.7.0.gem and vendor/cache/utils-36a630acaf9e/ (still as a directory).
+
+Then I use another script to packages each Hanami framework into a gem (eg: vendor/cache/hanami-utils-1.0.0.beta1.gem).
+
+After that, the script generates an index of all the vendored gems (in vendor/cache).
+
+Spec Execution
+
+Now that all the dependencies are installed as a gem, the build can execute the single spec.
+
+The method with_project (see the example above) is a testing facility that does a lot of useful things. It creates a temporary directory, it changes the current Ruby directory to into the temporary one (see Dir.chdir), and it generates a new full blown Hanami project.
+
+Vendored Gems
+
+When you generate a new Hanami project, its Gemfile uses Rubygems as source, but because I want to use the vendored gems, with_project patches the Gemfile for the new generated project:
+
+# tmp/aruba/bookshelf/Gemfile
+source 'file://vendor/cache'
+
+# ...
+Yes, Bundler allows the source to be a directory, only if that directory has an index of all the gems. This is why the ci script generates that index as last step of the setup (see above).
+
+At this point, with_project runs bundler install --local, so the new generated project can use the vendored gems.
+
+Run Commands
+
+Now it can finally yield the block inside with_project. For our example it runs the hanami version command and it verifies if the output is correct.
+
+This set of operations are delegated to run_command. It’s a wrapper on top of Aruba, a great CLI testing framework.
+
+This run_command method, guarantees that the Hanami commands used at the testing time, are coming from the vendored gems. It also has the responsibility of running a given command via a system call, and to verify if stdout/stderr streams have the expected output. As last verification, it checks if the exit code was successful.
+
+Cleanup
+
+After the block is yielded, with_project cleans the temporary directory, which wipes the Hanami project used during that test. This prevents the same project to be used twice.
+
+Conclusion
+
+To test Hanami CLI is complex: it requires a reliable CI build (with full isolation of each spec), and a deep knowledge of the Ruby toolchain. If this looks complex, I can tell you we’ve just scratched the surface. Next time we’ll talk about code generators.
+
+ 
+ SOURCE: http://lucaguidi.com/2017/01/20/how-to-test-ruby-cli-the-setup/
+ 
