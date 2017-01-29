@@ -1,0 +1,13 @@
+Human:
+At some point, you can start to think about how it would be great to have in your pure Ruby objects of your Rails application the same DSL as Rails’ controllers have to rescue exceptions coming from actions with the rescue_from help.
+It’s not a secret to everyone that it’s too easy to catch all targeted exceptions raised in any Rails controller.
+We use this in the call_with_rescue method, which wraps that method that does a real job and can raise an exception at some point (this is the useful_yield method).
+Or it will be raised up and an end user will observe it in case if we don’t have a defined rescue handler for this exception.
+Just place the code above in a test.rb file located in a Rails application and execute it with the rails runner using following command: rails runner test.rb.
+
+Summary generator system:
+At some point, you can start to think about how it would be great to have in your pure Ruby objects of your Rails application the same DSL as Rails’ controllers have to rescue exceptions coming from actions with the rescue_from help. POINTS: 145.4
+It’s not a secret to everyone that it’s too easy to catch all targeted exceptions raised in any Rails controller. POINTS: 58.25
+We use this in the call_with_rescue method, which wraps that method that does a real job and can raise an exception at some point (this is the useful_yield method). POINTS: 51.900000000000006
+Or it will be raised up and an end user will observe it in case if we don’t have a defined rescue handler for this exception. POINTS: 43.8
+Just place the code above in a test.rb file located in a Rails application and execute it with the rails runner using following command: rails runner test.rb. POINTS: 88.35

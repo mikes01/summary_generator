@@ -1,0 +1,13 @@
+Human:
+In this article I will only be talking about the now recommended way of installing and running Docker, using Docker for X, where X is the OS rather than the old approach of using Docker toolbox.
+Please note, if you are running Windows 10 Home, then you will need to be using Docker toolbox rather than Docker for Windows.
+In this instance, I shall be installing and running Docker for Windows, however, the contents of this document are the same regardless of which OS you are running (hence the beauty of Docker).
+Most official images can be found on Docker’s own service called Docker Hub, which is akin to GitHub for Git.
+Docker Compose is a service provided by Docker as part of the installation as a means of booting and managing multiple Docker images at the same time, all in one place.
+
+Summary generator system:
+In this article I will only be talking about the now recommended way of installing and running Docker, using Docker for X, where X is the OS rather than the old approach of using Docker toolbox. POINTS: 149.1
+Please note, if you are running Windows 10 Home, then you will need to be using Docker toolbox rather than Docker for Windows. POINTS: 110.05
+In this instance, I shall be installing and running Docker for Windows, however, the contents of this document are the same regardless of which OS you are running (hence the beauty of Docker). POINTS: 108.6
+Most official images can be found on Docker’s own service called Docker Hub, which is akin to GitHub for Git. POINTS: 114.8
+Docker Compose is a service provided by Docker as part of the installation as a means of booting and managing multiple Docker images at the same time, all in one place. POINTS: 165.5

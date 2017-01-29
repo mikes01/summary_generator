@@ -109,9 +109,10 @@ if options[:base_articles].nil?
 
   results.values.each do |sentence|
     p sentence[:sentence]
-    p "word_frequency_at_article: #{sentence[:word_frequency_at_article]} word_frequency_at_dictionary: #{sentence[:word_frequency_at_dictionary]} "\
-      "title_tokens: #{sentence[:title_tokens]} cue_words: #{sentence[:cue_words]} position: #{sentence[:position]} "\
-      "total: #{sentence[:total]}"
+    # p "word_frequency_at_article: #{sentence[:word_frequency_at_article]} word_frequency_at_dictionary: #{sentence[:word_frequency_at_dictionary]} "\
+    #   "title_tokens: #{sentence[:title_tokens]} cue_words: #{sentence[:cue_words]} position: #{sentence[:position]} "\
+    #   "total: #{sentence[:total]}"
+    tp [sentence], :word_frequency_at_article, :word_frequency_at_dictionary, :title_tokens, :cue_words, :position, :total
     puts ""
   end
 

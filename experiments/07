@@ -1,0 +1,13 @@
+Human:
+The framework ships with an extensive Command Line Interface (CLI) to generate (or destroy) code, start the server, open a Ruby (or a database) console, create/drop the database, run the migrations, precompile assets, and print informations.
+As I want to have integration tests to use CLI commands for real, the test suite is free of mocks/stubs.
+This is a basic integration test to verify that the CLI command hanami version will print the current Hanami version.
+But in order to make the tests real, I want to install Hanami frameworks as a gem, instead of using their code from a directory.
+To test Hanami CLI is complex: it requires a reliable CI build (with full isolation of each spec), and a deep knowledge of the Ruby toolchain.
+
+Summary generator system:
+The framework ships with an extensive Command Line Interface (CLI) to generate (or destroy) code, start the server, open a Ruby (or a database) console, create/drop the database, run the migrations, precompile assets, and print informations. POINTS: 96.55
+As I want to have integration tests to use CLI commands for real, the test suite is free of mocks/stubs. POINTS: 79.6
+This is a basic integration test to verify that the CLI command hanami version will print the current Hanami version. POINTS: 86.75
+But in order to make the tests real, I want to install Hanami frameworks as a gem, instead of using their code from a directory. POINTS: 65.45
+To test Hanami CLI is complex: it requires a reliable CI build (with full isolation of each spec), and a deep knowledge of the Ruby toolchain. POINTS: 95.15

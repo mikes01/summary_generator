@@ -1,81 +1,67 @@
-Ruby Coercion Protocols Part 2
+Flutterby Event Handling
 
-In the first part of this article, I introduced Coercion Protocols for Ruby. You are probably familiar with them if it ever happened to use #to_i. But there is also #to_int, right? What are the differences between them?
+Flutterby has a built-in HTTP server that will serve your website. Just like Flutterby does when you’re exporting your site to its static version, the first thing it will do is read your source directory and build an in-process object graph from all the files it encounters. (This graph is the very core of everything that Flutterby does.)
 
-Explicit vs Implicit Protocols
+When a file changes in the filesystem, we obviously want this change to be reflected when viewing the site, so this graph needs to be updated. The currently released version of Flutterby has a very brute-force approach to this: whenever it detects a change in the file system, it reloads the entire graph from scratch.
 
-There are two different types of Coercion Protocols: implicit and explicit.
+This works fine (and is faster than it sounds), but it’s not a solid base for where I ultimately want to go with this framework. To this end, I’m currently adding code that, when a file is changed (or deleted, or added), will only reload, remove or add the node that was originally spawned from it. But when you’re changing the graph dynamically, how do you keep things up-to-date?
 
-There are methods that require an explicit invocation and a soft semantic. These are methods like #to_s, #to_f, #to_i, #to_a, etc… Do we want to convert a string into an integer? We do "23".to_i and we get 23.
+Shapeshifting the Site Graph
 
-This is helpful, but sometimes the results can be unpredictable: "foo".to_i returns 0. This soft semantic can lead to subtle bugs.
+You may have code in your project that modifies the graph dynamically. For example, I have some code for this site that makes sure blog posts have URLs that reflect their individual dates: /posts/2017/01/25/flutterby-events.html instead of just /posts/flutterby-events.html.
 
-Sometimes we need an implicit, but stronger semantic to guarantee that the output is really meaningful for our business logic. Ruby Kernel has a set of functions that help with this kind of stronger coercion.
+Other frameworks may do this through URL rewriting hacks; in the world of Flutterby, you shapeshift the graph that represents your site before it gets exported (or served.) Yes, you literally create new directories and move files – except that you do this purely in memory, by modifying the site graph.
 
-# Explicit Coercion
-"23".to_i # => 23
-"foo".to_i # => 0 # Unexpected
+You will typically do this from within initializers, special files named _init.rb. The code that does the filing of my blog posts currently looks like this:
 
-# Implicit Coercion
-Integer(23) # => 23
-Integer("foo") # => ArgumentError # It prevents bugs
-In this case, Kernel invokes #to_int on the received argument (23 or "foo"). In our example, 23 works because Integer implements #to_int, while "foo" raises an error because String doesn't implement that method.
-
-Only the objects that can really coerce themselves into another type expose implicit protocols. These methods are #to_str, #to_hash, etc..
-
-If you need your value object to be coerced into a specific primitive, consider implementing these protocols.
-
-Using our Temperature example from a previous post, let's say we want to be able to sum it with other objects.
-
-class Temperature
-  # ...
-  def initialize(temperature)
-    @temperature = Float(temperature)
-  end
-
-  def to_s
-    "Temperature: #{temperature}"
-  end
-
-  def to_f
-    temperature
-  end
-
-  def +(other)
-    self.class.new(temperature + other.to_f)
-  end
-
-  protected
-
-  attr_reader :temperature
-end
-
-puts Temperature.new(37) + 5
-  # => "Temperature: 42.0"
-puts Temperature.new(37) + Temperature.new(9)
-  # => "Temperature: 46.0"
-Our method #+ is able to accept any object that implements #to_f. The first time we pass 5 and the second time Temperature.new(9). Both these objects implement #to_f coercion protocol and they can be used in this operation.
-
-But what about this case?
-
-puts 5 + Temperature.new(37)
-  # => Temperature can't be coerced into Fixnum (TypeError)
-Coerce with #coerce
-
-We can use Ruby's #coerce to make the arithmetic operations commutative.
-
-class Temperature
-  # ...
-  
-  def coerce(other)
-    [self.class.new(other), self]
+on :setup do
+  posts.each do |post|
+    move_post(post)
   end
 end
 
-puts 5 + Temperature.new(37)
-  # => "Temperature: 42.0"
-Conclusion
+def move_post(post)
+  post.parent = get_date_node(post.date)
+end
 
-We have seen that Ruby is a great language. It ships with powerful primitives that we often abuse. We should prefer to encapsulate these primitives into value objects, by keeping the compatibility with Ruby ecosystem via coercion protocols.
+# Find (or create) a child node structure that represents the given
+# date (eg. "2017/04/01").
+#
+def get_date_node(date)
+  year, month, day = date.strftime("%Y/%m/%d").split("/")
 
-SOURCE: https://blog.dnsimple.com/2017/01/ruby-coercion-protocols-part-2/
+  yearly  = find(year) || create(year)
+  monthly = yearly.find(month) || yearly.create(month)
+  monthly.find(day) || monthly.create(day)
+end
+The :setup event will be triggered by Flutterby once the site graph has been created fully, and before Flutterby starts exporting or serving your site. This is where you would typically hook in to perform graph modifications.
+
+In the :setup handler above, we iterate through the posts array (which is another helper that I’ve added that returns a list of all blog posts), and move each post to its correct date path.
+
+Reacting to events
+
+Now here’s the thing – in this new world where any part of the site graph may be reloaded at any time, we need to be able to react on this in other parts of the tree – for example, if the date of an existing blog post changes, we want to make sure that our blog section can move it to the new date URL.
+
+Flutterby fires a :reloaded event when a node is reloaded, and we will use it to notify the root node of the blog so it can do its work. In the initializer code for our posts, let’s do this:
+
+on :reloaded do
+  emit :post_reloaded, self
+end
+The emit method fires a new event that bubbles up the graph – in other words, the originating node’s parent, its own parent, and so on, up to the root node itself will be notified about it, and everyone gets a chance to react.
+
+So, back in the blog section’s code, we can now do this:
+
+on :post_reloaded do |post|
+  move_post(post)
+end
+Voila, now the blog section will keep re-filing posts into the correct folder when they change! You can see the complete code for my initializer right here.
+
+Final Notes
+
+You may think that you don’t not need this kind of flexibility when simply building a small static site – and you’d be completely right. These features are primarily in preparation for Flutterby’s “Live Mode”, which essentially turns your site into a fully-fledged web application once you have the need for it.
+
+Note that this stuff currently lives in an experimental branch and will very likely change another couple of times before landing in master.
+
+For more information on Flutterby, check out its website, flutterby.run.
+
+SOURCE: http://hmans.io/posts/2017/01/27/flutterby-events.html

@@ -1,0 +1,13 @@
+Human:
+Just like Flutterby does when you’re exporting your site to its static version, the first thing it will do is read your source directory and build an in-process object graph from all the files it encounters.
+When a file changes in the filesystem, we obviously want this change to be reflected when viewing the site, so this graph needs to be updated.
+The currently released version of Flutterby has a very brute-force approach to this: whenever it detects a change in the file system, it reloads the entire graph from scratch.
+Other frameworks may do this through URL rewriting hacks; in the world of Flutterby, you shapeshift the graph that represents your site before it gets exported (or served.) Yes, you literally create new directories and move files – except that you do this purely in memory, by modifying the site graph.
+The :setup event will be triggered by Flutterby once the site graph has been created fully, and before Flutterby starts exporting or serving your site.
+
+Summary generator system:
+Just like Flutterby does when you’re exporting your site to its static version, the first thing it will do is read your source directory and build an in-process object graph from all the files it encounters. POINTS: 90.55
+When a file changes in the filesystem, we obviously want this change to be reflected when viewing the site, so this graph needs to be updated. POINTS: 65.75
+The currently released version of Flutterby has a very brute-force approach to this: whenever it detects a change in the file system, it reloads the entire graph from scratch. POINTS: 74.95
+Other frameworks may do this through URL rewriting hacks; in the world of Flutterby, you shapeshift the graph that represents your site before it gets exported (or served.) Yes, you literally create new directories and move files – except that you do this purely in memory, by modifying the site graph. POINTS: 66.2
+The :setup event will be triggered by Flutterby once the site graph has been created fully, and before Flutterby starts exporting or serving your site. POINTS: 74.55

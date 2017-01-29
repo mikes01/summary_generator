@@ -5,3 +5,4 @@ gem 'byebug'
 gem 'pragmatic_tokenizer'
 gem 'activesupport'
 gem 'lemmatizer'
+gem "table_print"

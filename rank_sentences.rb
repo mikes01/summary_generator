@@ -5,10 +5,10 @@ class RankSentences
   def initialize(
     params
   )
-    self.word_frequency_at_article_weight = params[:word_frequency_at_article_weight] || 2
-    self.word_frequency_at_dictionary_weight = params[:word_frequency_at_dictionary_weight] || 0.1
+    self.word_frequency_at_article_weight = params[:word_frequency_at_article_weight] || 0.5
+    self.word_frequency_at_dictionary_weight = params[:word_frequency_at_dictionary_weight] || 0.05
     self.title_tokens_weight = params[:title_tokens_weight] || 10
-    self.sentence_position_weight = params[:sentence_position_weight] || 4
+    self.sentence_position_weight = params[:sentence_position_weight] || 10
     self.cue_words_weight = params[:cue_words_weight] || 5
     self.premium_position_ratio = params[:premium_position_ratio] || 0.1
     self.dictionary = YAML::load_file(params[:dictionary_path] || './dictionary.yml')

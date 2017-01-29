@@ -1,0 +1,13 @@
+Human:
+RSpec API is constantly evolving towards as DRY and readable DSL as possible.
+subject statement is a really idiomatic addition to modern RSpec, which allows to unambiguosly say what are we testing, and simplify tests afterwards.
+Imagine you need to test tons of return values of some relatively simple method, in different conditions it should return different results.
+Unfortunately, currently there is no way to say “to this and not that” (because of long discussion of scope ambiguity).
+Again, there is long-living (yet hard for me to follow) discussion why “expect some code to call some methods on some objects” is the only RSpec check that can’t be expressed in a single statement.
+
+Summary generator system:
+RSpec API is constantly evolving towards as DRY and readable DSL as possible. POINTS: 42.55
+subject statement is a really idiomatic addition to modern RSpec, which allows to unambiguosly say what are we testing, and simplify tests afterwards. POINTS: 52.1
+Imagine you need to test tons of return values of some relatively simple method, in different conditions it should return different results. POINTS: 41.7
+(Note, that it is just rspec + rspec/its, no additional code needed): POINTS: 46.0
+Again, there is long-living (yet hard for me to follow) discussion why “expect some code to call some methods on some objects” is the only RSpec check that can’t be expressed in a single statement. POINTS: 61.349999999999994

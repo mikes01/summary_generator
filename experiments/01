@@ -1,0 +1,14 @@
+Human:
+This article is about speeding up bulk imports in Rails.
+Let’s imagine we have 50,000 products to import… not an absurd amount, but enough that we can start to notice some pain and enough that we wouldn’t want to keep the user sitting there while the system tries to import them all.
+The first thing we’ll do to speed up the import is to rely on our database to ensure the skus are unique rather than on Rails.
+In this article, we relied upon our not-null database constraints along with a unique index, and then we used the ability to insert multiple records with a single SQL query.
+All in all, we were able to get 50,000 records into the database from 59 seconds all the way down to 4.6 seconds, around 12 times faster.
+
+
+Summary generator system:
+This article is about speeding up bulk imports in Rails. POINTS: 67.65
+Let’s imagine we have 50,000 products to import… not an absurd amount, but enough that we can start to notice some pain and enough that we wouldn’t want to keep the user sitting there while the system tries to import them all. POINTS: 66.55
+Rails is having to talk over TCP to the database four times for each record, plus it is having to build two different SQL statements, each time. POINTS: 53.1
+The first thing we’ll do to speed up the import is to rely on our database to ensure the skus are unique rather than on Rails. POINTS: 61.05
+All in all, we were able to get 50,000 records into the database from 59 seconds all the way down to 4.6 seconds, around 12 times faster. POINTS: 55.45

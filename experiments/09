@@ -1,0 +1,13 @@
+Human:
+Sprockets is the thing behing Rails Asset Pipeline.
+It's also designed to be easily extensible in case you need to integrate something Sprockets don't support out of the box.
+Now wouldn't it be nice if you could just drop Elm files in you app/assets, let the Asset Pipeline handle the heavy lifting, and just focus on new realtime search in your side project(which is gonna be the next big thing)?
+The things which process various source files in Sprockets are called simply 'processors'.
+Now to test it in action, install new Elm package in you Rails root with 'elm package install' and create following Elm file:
+
+Summary generator system:
+Sprockets is the thing behing Rails Asset Pipeline. POINTS: 35.1
+It's also designed to be easily extensible in case you need to integrate something Sprockets don't support out of the box. POINTS: 35.75
+On the first line we tell Sprockets how to recognize Elm files - by theirs '.elm' file extension. POINTS: 42.9
+The things which process various source files in Sprockets are called simply 'processors'. POINTS: 32.8
+Now to test it in action, install new Elm package in you Rails root with 'elm package install' and create following Elm file: POINTS: 56.75

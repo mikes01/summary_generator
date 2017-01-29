@@ -1,66 +1,49 @@
-Scale your Elasticsearch queries with filtered aliases
+Event Driven Elasticsearch Bulk Updates
 
-Elasticsearch is a great data store for implementing full-text search and analytics. If your use case warrants it, I would highly recommend using it. That said, there are certain applications where you need to be careful how you go about indexing your data.
-User-based data flow
-Suppose you are a huge medical insurance company with millions of customers, and for each customer you have reams of patient data. Now suppose you’d like to be able to efficiently search that patient data and you decide to use Elasticsearch. How would you go about doing this?
-A logical approach would be to store each patient data under its own patient index. My patient data would be stored under my index, and your patient data would be stored under your index. This is known as the user-based data flow.
-Having an index per patient works if the number of patients is not too large. But our insurance company has millions of patients, which means it also has millions of Elasticsearch indices. In this scenario, Elasticsearch would slow to a crawl.
-There is a solution: We can trick the user into thinking we have an index per patient by using index aliases. Aliases are basically names that map to a specific index. In our case, we have millions of aliases mapping to a handful of primary indices. From a user perspective, each of these aliases looks like an individual index.
-Some examples with code
-In the following code examples, I’m using Ruby 2.3.3 and Elasticsearch version 2.4.2. Ruby has an excellent Elasticsearch gem that makes it easy to demonstrate what’s going on. The documentation for this gem is also very good. I’m running Elasticsearch locally on port 9200.
-Let’s require the Elasticsearch gem and Ruby’s JSON library, and make sure our Elasticsearch instance is up and running.
+You’ve got or are considering elasticsearch hooked up to bring some real speed back to your application, but have hit a snag. Each time a model is updated, it’s reindexed, but doing these operations one at a time has added a huge load to your application, database, and elasticsearch instance because of highly inefficient processing. Sit back, and read how I implemented a fix for this on the Searchkick gem, that brough efficiency back to the reindexing process.
 
-Running client.info gives us the following result:
-pry(main)> client.info
-=> {"name"=>"Dredmund Druid",
- "cluster_name"=>"elasticsearch_mkim",
- "cluster_uuid"=>"f19ZvZWLTsaJeUM9ww1nQw",
- "version"=>
-  {"number"=>"2.4.2",
-   "build_hash"=>"161c65a337d4b422ac0c805f284565cf2014bb84",
-   "build_timestamp"=>"2016-11-17T11:51:03Z",
-   "build_snapshot"=>false,
-   "lucene_version"=>"5.5.2"},
- "tagline"=>"You Know, for Search"}
-Now we need to create the primary index that all the aliases will reference. I’m calling this index patients. I couldn’t find a convenient command in the Elasticsearch gem to perform a basic PUT HTTP request, so for these types of requests I’m resorting to using Faraday. (If anyone is aware of a command, please feel free to post in the comments.)
+We had the need to be able to handle large updates to our document set, but also to ensure that any updates which needed to happen were immediately picked up. This second requirement removed a scheduled job from our list of possibilities, and since polling redis for updates seemed like a terrible idea, left me with an event driven design. (Note, since Searchkick 2 has been released, very similar functionality, though not quite as fast as my custom implementation here, is now part of the gem) What follows is a close approximation of what was implemented.
 
-Now let’s create aliases for two patients named PatientA and PatientB.
+High Level:
 
-As you can see, the alias mapping is done through the patient_name field. For those still following, you may have noticed that there is an extra routing field in the request body. This field is important and I’ll explain why next.
-Typically, patient data would be stored in several different shards. When a search is performed within a particular patient’s data, Elasticsearch would need to search several different shards and then combine those results. This is inefficient. A better way would be to store all the data for a specific patient in one shard. Elasticsearch allows us to do this through routes. By providing a specific route, Elasticsearch will know to store a particular patient’s data in the shard specified by the route. That’s what the routing field is for.
-We are now ready to store some documents for each patient. In a production setting, we may be storing huge amounts of data. We can improve indexing performance by disabling refresh and using the bulk API. Even though this example is using a tiny data set, I’ll use both refresh disabling and the bulk API for demonstration purposes.
+Insert Records IDs to a Redis Set
+After inserting ID, queue up a Searchkick::ForemanJob
+Searchkick::Foreman job takes chunks of ids and sends to a Searchkick::BulkUpdaterJob
+BulkUpdaterJob sends bulk requests to elasticsearch
+Callback
 
-Now we can perform the search!
-pry(main)> client.search index: 'patients', q: 'content:The quick brown'
-=> {"took"=>4,
- "timed_out"=>false,
- "_shards"=>{"total"=>5, "successful"=>5, "failed"=>0},
- "hits"=>
-  {"total"=>1,
-   "max_score"=>0.26442188,
-   "hits"=>
-    [{"_index"=>"patients",
-      "_type"=>"patient_type",
-      "_id"=>"AVkBDPk-1ECoVlT3taI2",
-      "_score"=>0.26442188,
-      "_routing"=>"PatientA",
-      "_source"=>{"patient_name"=>"PatientA", "content"=>"The quick brown fox"}}]}}
-pry(main)> client.search index: 'PatientA', q: 'content:The quick brown'
-=> {"took"=>2,
- "timed_out"=>false,
- "_shards"=>{"total"=>1, "successful"=>1, "failed"=>0},
- "hits"=>
-  {"total"=>1,
-   "max_score"=>0.26442188,
-   "hits"=>
-    [{"_index"=>"patients",
-      "_type"=>"patient_type",
-      "_id"=>"AVkBDPk-1ECoVlT3taI2",
-      "_score"=>0.26442188,
-      "_routing"=>"PatientA",
-      "_source"=>{"patient_name"=>"PatientA", "content"=>"The quick brown fox"}}]}}
-Notice that when we performed the search on the primary index patients we can see that all five shards were involved in the search. When we searched on the alias PatientA only one shard was used. It looks like the aliasing is working. It also looks like the routing is working since only one shard was used when searching with the alias.
-Conclusion
-If you expect to have a very large amount of data stored in your Elasticsearch instance, you will need to use filtered index aliases with routing, otherwise your cluster’s performance will degrade significantly.
+#models/products.rb
+after_commit :add_id_to_redis_queue
 
-SOURCE: https://blog.fluentz.io/scale-your-elasticsearch-queries-with-filtered-aliases-e659c542e8ee#.of5sgl91f
+def add_id_to_redis_queue
+  Redis.new.sadd :products, id
+end
+Foreman Job
+
+#jobs/searchkick/foreman_job.rb
+def perform
+  redis = Redis.new
+  product_ids = redis.smembers :products
+  product_ids.each_slice(Product.searchkick_index.options[:batch_size] || 1000) do | product_id_batch |
+    Searchkick::BulkUpdaterJob.perform_later(product_id_batch)
+    redis.srem :products, product_id_batch
+  end
+end
+Bulk Updater Job
+
+#jobs/searchkick/bulk_updater_job.rb
+def perform(product_ids)
+  products = Product.where(id: product_ids).search_import
+  Product.searchkick_index.import(products) #This is a batch operation
+end
+Wrap Up
+
+Put all together, this leverages redis sets to enforce uniqueness of added keys and Searchkick’s bulk import to both efficiently load data from your database, and then send it off to elasticsearch. This will provide a good boost in speed to reindexing a single model, but really shines when data from other models is being denormalized on the search document. The reason why is to do so requires loading information from associated models, so doing bulk loads from the database dramatically reduces the resource load on your Postgres instance, while at the same time reducing the load on elasticsearch.
+
+Is your current search solution lacking in speed or causing extreme load on your application’s resources and you’d like an expert to check it out? Reach out and I’d be happy to discuss possible solutions to bring your project back up to speed.
+
+If you enjoy having free time and the peace of mind that a professional is on your side, then you’d love to have me work on your project.
+
+Contact or view a list of available services to see how I’ll make your life better, easier and bring satisfaction back into you running your business.
+
+SOURCE: http://blog.nrowegt.com/event-driven-elasticsearch-bulk-updates/

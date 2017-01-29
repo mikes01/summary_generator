@@ -1,0 +1,13 @@
+Human:
+Investing a little bit of time and effort will decrease the likelihood of ending up with a outdated web of dependencies where no one knows why you’re using all these gems in the first place.
+This seems commonly known by now: If you’re working on a application, like a Rails app, you want to have the exact same dependencies on your developer machine, the CI server and the production environment.
+Most gems that you declare in your Gemfile have dependencies themselves.
+The more groups you have the more you have to think which group a gem belongs to and the harder it is to understand which gem gets loaded when.
+It only takes a little bit of effort to improve things. Taking care of your Gemfile with basic hygiene and some ongoing love will make life for future you much easier.
+
+Summary generator system:
+Investing a little bit of time and effort will decrease the likelihood of ending up with a outdated web of dependencies where no one knows why you’re using all these gems in the first place. POINTS: 51.2
+This seems commonly known by now: If you’re working on a application, like a Rails app, you want to have the exact same dependencies on your developer machine, the CI server and the production environment. POINTS: 59.650000000000006
+Most gems that you declare in your Gemfile have dependencies themselves. POINTS: 48.9
+The more groups you have the more you have to think which group a gem belongs to and the harder it is to understand which gem gets loaded when. POINTS: 51.6
+You can end up in a web of outdated dependencies, old gems that are actually not needed anymore and Rails processes taking 100s of megabytes of RAM. POINTS: 55.75

@@ -2,7 +2,7 @@ Writing a Sprockets plugin
 
 Sprockets is the thing behing Rails Asset Pipeline. It's a powerful asset processor with many already built-in goodies. It's the thing which takes your assets(be it sass, coffee, etc..) and does all the boring compiling, concatenating, minifiing and compressing. It's also designed to be easily extensible in case you need to integrate something Sprockets don't support out of the box.
 
-Ok, so imagine you'v just discovered some new and shiny frontend thing you want to try. Let's say it's Elm. Now wouldn't it be nice if you could just drop Elm files in you app/assets, let the Asset Pipeline handle the heavy lifting, and just focus on new realtime search in your side project(which is gonna be the next big thing)?
+Ok, so imagine you'v just discovered some new and shiny frontend thing you want to try. Let's say it's Elm.
 
 I know it would. And it doesn't take more than 10 minutes. Let's do it from top to bottom:
 

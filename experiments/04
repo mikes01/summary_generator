@@ -1,0 +1,13 @@
+Human:
+This question becomes increasingly interesting as Ruby 3.0 aims to be 3 times as fast as Ruby 2.0.
+Of course, as the new benchmark was inspired by Ruby 3.0 aiming to be 3 times as fast as Ruby 2.0 – how are we doing?
+Therefore, the next chart compares the newest version of a Ruby implementation benchmarked here against their older sibling from last time (Ruby 2.4.0 against 2.2.3, JRuby 9.1.7.0 vs. 9.0.3.0 etc.):
+JRuby is coming along nicely, it’s the only Ruby implementation that runs this benchmark at a 3x speed of Ruby 2.0 while able to run whole Rails applications at the same time.
+JRuby at the moment also sits sort of in the middle of CRuby and TruffleRuby in other concerns – it takes more warmup time than CRuby but a lot less than TRuffleRuby while still reaching nice peak performance
+
+Summary generator system:
+This question becomes increasingly interesting as Ruby 3.0 aims to be 3 times as fast as Ruby 2.0. POINTS: 96.35
+Of course, as the new benchmark was inspired by Ruby 3.0 aiming to be 3 times as fast as Ruby 2.0 – how are we doing? POINTS: 95.85
+Therefore, the next chart compares the newest version of a Ruby implementation benchmarked here against their older sibling from last time (Ruby 2.4.0 against 2.2.3, JRuby 9.1.7.0 vs. 9.0.3.0 etc.): POINTS: 117.6
+JRuby is coming along nicely, it’s the only Ruby implementation that runs this benchmark at a 3x speed of Ruby 2.0 while able to run whole Rails applications at the same time. POINTS: 137.85
+JRuby at the moment also sits sort of in the middle of CRuby and TruffleRuby in other concerns – it takes more warmup time than CRuby but a lot less than TRuffleRuby while still reaching nice peak performance

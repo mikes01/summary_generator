@@ -1,0 +1,13 @@
+Human:
+Elasticsearch is a great data store for implementing full-text search and analytics.
+Let’s require the Elasticsearch gem and Ruby’s JSON library, and make sure our Elasticsearch instance is up and running.
+When a search is performed within a particular patient’s data, Elasticsearch would need to search several different shards and then combine those results.
+By providing a specific route, Elasticsearch will know to store a particular patient’s data in the shard specified by the route.
+If you expect to have a very large amount of data stored in your Elasticsearch instance, you will need to use filtered index aliases with routing, otherwise your cluster’s performance will degrade significantly.
+
+Summary generator system:
+Now suppose you’d like to be able to efficiently search that patient data and you decide to use Elasticsearch. POINTS: 55.0
+Let’s require the Elasticsearch gem and Ruby’s JSON library, and make sure our Elasticsearch instance is up and running. POINTS: 55.95
+When a search is performed within a particular patient’s data, Elasticsearch would need to search several different shards and then combine those results. POINTS: 62.15
+By providing a specific route, Elasticsearch will know to store a particular patient’s data in the shard specified by the route. POINTS: 57.5
+If you expect to have a very large amount of data stored in your Elasticsearch instance, you will need to use filtered index aliases with routing, otherwise your cluster’s performance will degrade significantly. POINTS: 78.45
